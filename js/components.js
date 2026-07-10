@@ -30,10 +30,9 @@ const TERMINAL_ROLES = {
 
 const WIRE_COLORS = {
   red: "#dc2626",
-  black: "#18181b",
+  gray: "#71717a",
   blue: "#2563eb",
   green: "#16a34a",
-  gray: "#71717a",
 };
 
 // Global, used to keep track of the next component id to be assigned.
@@ -50,10 +49,28 @@ function nextComponentInstanceId(prefix) {
 
 /**
  * Returns absolute stage coordinates for a terminal circle center.
- * @param {{ node: Konva.Circle }} terminal - Terminal metadata object.
+ * @param {{ node: Konva.Circle, handle?: Konva.Group }} terminal - Terminal metadata object.
  */
 function getTerminalPosition(terminal) {
+  if (terminal.handle) {
+    return terminal.handle.getAbsolutePosition();
+  }
   return terminal.node.getAbsolutePosition();
+}
+
+/**
+ * Walks up from a terminal node to the component group that owns componentId.
+ * @param {{ node: Konva.Circle, componentGroup?: Konva.Group }} terminal - Terminal metadata.
+ */
+function getTerminalComponentGroup(terminal) {
+  if (terminal.componentGroup) {
+    return terminal.componentGroup;
+  }
+  let node = terminal.node ? terminal.node.getParent() : null;
+  while (node && !node.componentId) {
+    node = node.getParent();
+  }
+  return node;
 }
 
 /**
@@ -68,56 +85,226 @@ function initComponent(group, componentType, instanceId, terminals) {
   group.componentId = instanceId;
   group.terminals = terminals;
   group.draggable(true);
+  // Small threshold so a click (e.g. doorbell press) is not treated as a drag.
+  group.dragDistance(4);
+}
+
+/** Distance from a shell edge to a terminal center (terminals sit just outside). */
+const TERMINAL_OUTSET = 16;
+
+/**
+ * Clamps a number into an inclusive range.
+ * @param {number} value - Input value.
+ * @param {number} min - Lower bound.
+ * @param {number} max - Upper bound.
+ */
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 /**
- * Draws a labeled terminal circle on a component group.
+ * Keeps a terminal on one shell side at a fixed outset (slide along, not in/out).
+ * @param {{ x: number, y: number }} pos - Proposed local position in the component group.
+ * @param {"top"|"bottom"|"left"|"right"} side - Edge the terminal is attached to.
+ * @param {number} shellWidth - Component box width.
+ * @param {number} shellHeight - Component box height.
+ * @param {number} outset - Distance outside the box edge.
+ */
+function constrainTerminalAlongSide(pos, side, shellWidth, shellHeight, outset) {
+  const edgePad = 10;
+  if (side === "top") {
+    return {
+      x: clamp(pos.x, edgePad, shellWidth - edgePad),
+      y: -outset,
+    };
+  }
+  if (side === "bottom") {
+    return {
+      x: clamp(pos.x, edgePad, shellWidth - edgePad),
+      y: shellHeight + outset,
+    };
+  }
+  if (side === "left") {
+    return {
+      x: -outset,
+      y: clamp(pos.y, edgePad, shellHeight - edgePad),
+    };
+  }
+  return {
+    x: shellWidth + outset,
+    y: clamp(pos.y, edgePad, shellHeight - edgePad),
+  };
+}
+
+/**
+ * Places a label relative to a terminal circle at the handle origin (0, 0).
+ * @param {Konva.Text} text - Label node.
+ * @param {number} radius - Terminal circle radius.
+ * @param {"right"|"left"|"above"|"below"} placement - Label side relative to the circle.
+ */
+function positionTerminalLabel(text, radius, placement) {
+  if (placement === "above") {
+    text.x(-text.width() / 2);
+    text.y(-radius - text.height() - 2);
+  } else if (placement === "below") {
+    text.x(-text.width() / 2);
+    text.y(radius + 2);
+  } else if (placement === "left") {
+    text.x(-radius - text.width() - 4);
+    text.y(-text.height() / 2);
+  } else {
+    text.x(radius + 4);
+    text.y(-text.height() / 2);
+  }
+}
+
+/**
+ * Draws a labeled terminal just outside a component shell.
+ * Drag slides it along its edge only (fixed distance from the box).
  * @param {Konva.Group} group - Parent component group.
  * @param {number} x - Local x of the terminal center.
  * @param {number} y - Local y of the terminal center.
  * @param {string} id - Terminal id within the component.
  * @param {string} label - Short label shown beside the terminal.
- * @param {{ role?: string, wireColor?: string, radius?: number }} [opts] - Terminal options.
+ * @param {{ role?: string, wireColor?: string, radius?: number, labelPlacement?: "right"|"left"|"above"|"below", side: "top"|"bottom"|"left"|"right", shellWidth: number, shellHeight: number }} opts - Terminal options.
  */
 function addTerminal(group, x, y, id, label, opts) {
   const options = opts || {};
   const radius = options.radius || 7;
   const fill = WIRE_COLORS[options.wireColor] || WIRE_COLORS.gray;
+  const placement = options.labelPlacement || "right";
+  const side = options.side || "top";
+  const shellWidth = options.shellWidth || 100;
+  const shellHeight = options.shellHeight || 80;
+  const outset = TERMINAL_OUTSET;
+
+  const start = constrainTerminalAlongSide(
+    { x: x, y: y },
+    side,
+    shellWidth,
+    shellHeight,
+    outset
+  );
+
+  const handle = new Konva.Group({
+    x: start.x,
+    y: start.y,
+    draggable: false,
+    name: "terminal-handle",
+  });
 
   const circle = new Konva.Circle({
-    x: x,
-    y: y,
+    x: 0,
+    y: 0,
     radius: radius,
     fill: fill,
     stroke: "#ffffff",
     strokeWidth: 2,
-    hitStrokeWidth: 16,
+    hitStrokeWidth: 20,
     name: "terminal",
   });
 
   const text = new Konva.Text({
-    x: x + radius + 4,
-    y: y - 6,
     text: label,
     fontSize: 11,
     fontFamily: "system-ui, Arial, sans-serif",
+    fontStyle: "bold",
     fill: "#3f3f46",
     listening: false,
   });
+  positionTerminalLabel(text, radius, placement);
 
-  group.add(circle);
-  group.add(text);
+  handle.add(circle);
+  handle.add(text);
+  group.add(handle);
 
-  return {
+  const terminal = {
     id: id,
     label: label,
     role: options.role || TERMINAL_ROLES.JUNCTION,
     wireColor: options.wireColor || "gray",
+    side: side,
     node: circle,
+    handle: handle,
+    componentGroup: group,
+    didSlide: false,
     getPosition: function () {
       return getTerminalPosition(this);
     },
   };
+
+  /**
+   * Slides the terminal to the current pointer, clamped to the shell edge.
+   * @param {Konva.Stage} stage - Active stage.
+   */
+  function slideToPointer(stage) {
+    const abs = stage.getPointerPosition();
+    if (!abs) {
+      return;
+    }
+    const toLocal = group.getAbsoluteTransform().copy().invert();
+    const local = toLocal.point(abs);
+    const constrained = constrainTerminalAlongSide(
+      local,
+      side,
+      shellWidth,
+      shellHeight,
+      outset
+    );
+    if (constrained.x !== handle.x() || constrained.y !== handle.y()) {
+      terminal.didSlide = true;
+    }
+    handle.position(constrained);
+    handle.fire("terminalslide");
+  }
+
+  /**
+   * Starts an edge-slide gesture; ignores parent component dragging.
+   * @param {Konva.KonvaEventObject} evt - Pointer down event.
+   */
+  function beginSlide(evt) {
+    evt.cancelBubble = true;
+    if (evt.evt && evt.evt.preventDefault) {
+      evt.evt.preventDefault();
+    }
+
+    const stage = group.getStage();
+    if (!stage) {
+      return;
+    }
+
+    terminal.didSlide = false;
+    group.draggable(false);
+    if (typeof group.stopDrag === "function") {
+      group.stopDrag();
+    }
+    stage.container().style.cursor = "grabbing";
+
+    /**
+     * Follows the pointer while the button is held.
+     */
+    function onMove() {
+      slideToPointer(stage);
+      stage.batchDraw();
+    }
+
+    /**
+     * Ends the slide gesture and restores component dragging.
+     */
+    function onUp() {
+      stage.off(".terminalSlide");
+      group.draggable(true);
+      stage.container().style.cursor = "default";
+      handle.fire("terminalslideend");
+    }
+
+    stage.on("mousemove.terminalSlide touchmove.terminalSlide", onMove);
+    stage.on("mouseup.terminalSlide touchend.terminalSlide", onUp);
+  }
+
+  handle.on("mousedown touchstart", beginSlide);
+
+  return terminal;
 }
 
 /**
@@ -128,6 +315,7 @@ function addTerminal(group, x, y, id, label, opts) {
  * @param {string} title - Title shown at the top of the box.
  */
 function addComponentShell(group, width, height, title) {
+  // listening: true so dragging the white box moves the component group.
   const rect = new Konva.Rect({
     x: 0,
     y: 0,
@@ -140,7 +328,7 @@ function addComponentShell(group, width, height, title) {
     shadowColor: "rgba(0,0,0,0.08)",
     shadowBlur: 8,
     shadowOffsetY: 2,
-    listening: false,
+    name: "component-shell",
   });
 
   const titleText = new Konva.Text({
@@ -245,20 +433,27 @@ function makePower(x, y) {
     })
   );
 
-  const terminalY = 6;
+  const terminalY = -TERMINAL_OUTSET;
   const spacing = shell.width / 4;
+  const edge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
   const terminals = [
     addTerminal(group, spacing, terminalY, "l1", "L1", {
       role: TERMINAL_ROLES.L1,
       wireColor: "blue",
+      labelPlacement: "above",
+      ...edge,
     }),
     addTerminal(group, spacing * 2, terminalY, "n", "N", {
       role: TERMINAL_ROLES.NEUTRAL,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...edge,
     }),
     addTerminal(group, spacing * 3, terminalY, "g", "G", {
       role: TERMINAL_ROLES.GROUND,
       wireColor: "green",
+      labelPlacement: "above",
+      ...edge,
     }),
   ];
 
@@ -275,50 +470,57 @@ function makeTerminalBlock(x, y) {
   const group = new Konva.Group({ x: x, y: y });
   const shell = addComponentShell(group, 280, 78, "Terminal Block");
 
-  const topY = 38;
-  const bottomY = 58;
+  const topY = -TERMINAL_OUTSET;
+  const bottomY = shell.height + TERMINAL_OUTSET;
   const topSpacing = shell.width / 4;
   const bottomSpacing = shell.width / 5;
+  const topEdge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const bottomEdge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
 
   const terminals = [
     addTerminal(group, topSpacing, topY, "l1", "L1", {
       role: TERMINAL_ROLES.L1,
       wireColor: "blue",
+      labelPlacement: "above",
+      ...topEdge,
     }),
     addTerminal(group, topSpacing * 2, topY, "n", "N", {
       role: TERMINAL_ROLES.NEUTRAL,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...topEdge,
     }),
     addTerminal(group, topSpacing * 3, topY, "g", "G", {
       role: TERMINAL_ROLES.GROUND,
       wireColor: "green",
+      labelPlacement: "above",
+      ...topEdge,
     }),
     addTerminal(group, bottomSpacing, bottomY, "com", "COM", {
       role: TERMINAL_ROLES.COM_24V,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
     addTerminal(group, bottomSpacing * 2, bottomY, "sig-f", "F", {
       role: TERMINAL_ROLES.JUNCTION,
       wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
     addTerminal(group, bottomSpacing * 3, bottomY, "sig-r", "R", {
       role: TERMINAL_ROLES.JUNCTION,
       wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
     addTerminal(group, bottomSpacing * 4, bottomY, "sig-s", "S", {
       role: TERMINAL_ROLES.JUNCTION,
       wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
   ];
-
-  group.add(
-    new Konva.Line({
-      points: [16, 48, shell.width - 16, 48],
-      stroke: "#e4e4e7",
-      strokeWidth: 1,
-      listening: false,
-    })
-  );
 
   initComponent(
     group,
@@ -374,27 +576,40 @@ function makeTransformer(x, y) {
 
   addGroundSymbol(group, 28, 78);
 
+  const topY = -TERMINAL_OUTSET;
+  const bottomY = shell.height + TERMINAL_OUTSET;
+  const topEdge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const bottomEdge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
   const terminals = [
-    addTerminal(group, 104, 8, "sec-hot", "24V", {
+    addTerminal(group, 104, topY, "sec-hot", "24V", {
       role: TERMINAL_ROLES.HOT_24V,
       wireColor: "red",
+      labelPlacement: "above",
+      ...topEdge,
     }),
-    addTerminal(group, 130, 8, "sec-com", "COM", {
+    addTerminal(group, 130, topY, "sec-com", "COM", {
       role: TERMINAL_ROLES.COM_24V,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...topEdge,
     }),
-    addTerminal(group, 24, shell.height - 8, "pri-l1", "L1", {
+    addTerminal(group, 24, bottomY, "pri-l1", "L1", {
       role: TERMINAL_ROLES.L1,
       wireColor: "blue",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
-    addTerminal(group, 50, shell.height - 8, "pri-n", "N", {
+    addTerminal(group, 50, bottomY, "pri-n", "N", {
       role: TERMINAL_ROLES.NEUTRAL,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
-    addTerminal(group, 28, 70, "pri-g", "G", {
+    addTerminal(group, 76, bottomY, "pri-g", "G", {
       role: TERMINAL_ROLES.GROUND,
       wireColor: "green",
-      radius: 6,
+      labelPlacement: "below",
+      ...bottomEdge,
     }),
   ];
 
@@ -443,20 +658,27 @@ function makeChime(x, y) {
     })
   );
 
-  const terminalY = shell.height - 6;
+  const terminalY = shell.height + TERMINAL_OUTSET;
   const spacing = shell.width / 4;
+  const edge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
   const terminals = [
     addTerminal(group, spacing, terminalY, "front", "Front", {
       role: TERMINAL_ROLES.CHIME_FRONT,
       wireColor: "red",
+      labelPlacement: "below",
+      ...edge,
     }),
     addTerminal(group, spacing * 2, terminalY, "trans", "Trans", {
       role: TERMINAL_ROLES.CHIME_TRANS,
       wireColor: "red",
+      labelPlacement: "below",
+      ...edge,
     }),
     addTerminal(group, spacing * 3, terminalY, "rear", "Rear", {
       role: TERMINAL_ROLES.CHIME_REAR,
       wireColor: "red",
+      labelPlacement: "below",
+      ...edge,
     }),
   ];
 
@@ -476,17 +698,22 @@ function makeButton(label, x, y) {
 
   addSwitchSymbol(group, shell.width / 2, 42, 30);
 
-  const terminalY = 8;
+  const terminalY = -TERMINAL_OUTSET;
   const leftX = shell.width / 3;
   const rightX = (shell.width / 3) * 2;
+  const edge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
   const terminals = [
     addTerminal(group, leftX, terminalY, "com", "COM", {
       role: TERMINAL_ROLES.BTN_COMMON,
-      wireColor: "black",
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...edge,
     }),
     addTerminal(group, rightX, terminalY, "sig", "SIG", {
       role: TERMINAL_ROLES.BTN_SIGNAL,
       wireColor: "red",
+      labelPlacement: "above",
+      ...edge,
     }),
   ];
 

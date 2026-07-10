@@ -1,4 +1,4 @@
-/* global TERMINAL_ROLES, COMPONENT_TYPES */
+/* global TERMINAL_ROLES, COMPONENT_TYPES, getTerminalComponentGroup */
 
 /**
  * Builds continuity simulation helpers for the doorbell circuit.
@@ -8,11 +8,11 @@
 function createCircuitSimulator(getWires, getComponents) {
   /**
    * Builds a stable key for a terminal.
-   * @param {{ node: Konva.Circle, id: string }} terminal - Terminal metadata.
+   * @param {{ node: Konva.Circle, id: string, componentGroup?: Konva.Group }} terminal - Terminal metadata.
    */
   function terminalKey(terminal) {
-    const group = terminal.node.getParent();
-    return group.componentId + ":" + terminal.id;
+    const group = getTerminalComponentGroup(terminal);
+    return (group && group.componentId ? group.componentId : "unknown") + ":" + terminal.id;
   }
 
   /**

@@ -56,7 +56,7 @@ class CircuitLabElement extends HTMLElement {
       '<div class="toolbar-group" data-lab-wire-colors role="group" aria-label="Wire color">' +
       '<span class="toolbar-label">Wire</span>' +
       '<button type="button" class="wire-swatch wire-red active" data-color="red" aria-label="Red wire" aria-pressed="true"></button>' +
-      '<button type="button" class="wire-swatch wire-black" data-color="black" aria-label="Black wire" aria-pressed="false"></button>' +
+      '<button type="button" class="wire-swatch wire-gray" data-color="gray" aria-label="Gray wire" aria-pressed="false"></button>' +
       '<button type="button" class="wire-swatch wire-blue" data-color="blue" aria-label="Blue wire" aria-pressed="false"></button>' +
       '<button type="button" class="wire-swatch wire-green" data-color="green" aria-label="Green wire" aria-pressed="false"></button>' +
       "</div>" +

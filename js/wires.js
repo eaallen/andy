@@ -1,4 +1,16 @@
-/* global Konva, WIRE_COLORS, getTerminalPosition */
+/* global Konva, WIRE_COLORS, getTerminalPosition, getTerminalComponentGroup */
+
+/** Dash patterns for same-color wires (first is solid). */
+const WIRE_DASH_PATTERNS = [
+  [],
+  [14, 8],
+  [3, 6],
+  [14, 6, 3, 6],
+  [14, 6, 3, 6, 3, 6],
+  [8, 5],
+  [3, 6, 3, 6, 14, 6],
+  [2, 5],
+];
 
 /**
  * Manages terminal-to-terminal wires on a Konva layer, with bend points and undo.
@@ -38,11 +50,11 @@ function createWireManager(layer, options) {
 
   /**
    * Builds a stable key for a terminal (component id + terminal id).
-   * @param {{ node: Konva.Circle }} terminal - Terminal metadata.
+   * @param {{ node: Konva.Circle, id: string, componentGroup?: Konva.Group }} terminal - Terminal metadata.
    */
   function terminalKey(terminal) {
-    const group = terminal.node.getParent();
-    return group.componentId + ":" + terminal.id;
+    const group = getTerminalComponentGroup(terminal);
+    return (group && group.componentId ? group.componentId : "unknown") + ":" + terminal.id;
   }
 
   /**
@@ -205,6 +217,57 @@ function createWireManager(layer, options) {
   }
 
   /**
+   * Returns the dash array for a pattern index (cycles if more wires than patterns).
+   * @param {number} patternIndex - Index into WIRE_DASH_PATTERNS.
+   */
+  function dashForPatternIndex(patternIndex) {
+    const index = ((patternIndex % WIRE_DASH_PATTERNS.length) + WIRE_DASH_PATTERNS.length) % WIRE_DASH_PATTERNS.length;
+    return WIRE_DASH_PATTERNS[index].slice();
+  }
+
+  /**
+   * Applies the wire's color-pattern dash to its Konva line.
+   * @param {object} wire - Wire record.
+   */
+  function applyWireDash(wire) {
+    if (!wire.line) {
+      return;
+    }
+    wire.line.dash(dashForPatternIndex(wire.patternIndex || 0));
+  }
+
+  /**
+   * Counts how many wires already use a given color.
+   * @param {string} colorKey - Wire color key.
+   */
+  function countWiresWithColor(colorKey) {
+    let count = 0;
+    for (let i = 0; i < wires.length; i += 1) {
+      if (wires[i].colorKey === colorKey) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Reassigns dash patterns for all wires of a color (first solid, then dashes/dots).
+   * @param {string} colorKey - Wire color key.
+   */
+  function reassignPatternsForColor(colorKey) {
+    let index = 0;
+    for (let i = 0; i < wires.length; i += 1) {
+      const wire = wires[i];
+      if (wire.colorKey !== colorKey) {
+        continue;
+      }
+      wire.patternIndex = index;
+      applyWireDash(wire);
+      index += 1;
+    }
+  }
+
+  /**
    * Hides and destroys bend handle circles for a wire.
    * @param {object} wire - Wire record.
    */
@@ -275,7 +338,7 @@ function createWireManager(layer, options) {
   function clearWireSelection() {
     if (selectedWire) {
       selectedWire.line.strokeWidth(3);
-      selectedWire.line.dash([]);
+      applyWireDash(selectedWire);
       destroyBendHandles(selectedWire);
       selectedWire = null;
     }
@@ -289,7 +352,6 @@ function createWireManager(layer, options) {
     clearWireSelection();
     selectedWire = wire;
     wire.line.strokeWidth(5);
-    wire.line.dash([8, 4]);
     showBendHandles(wire);
     layer.batchDraw();
   }
@@ -403,7 +465,7 @@ function createWireManager(layer, options) {
    * Creates a wire between two terminals.
    * @param {{ node: Konva.Circle }} from - First terminal.
    * @param {{ node: Konva.Circle }} to - Second terminal.
-   * @param {string} colorKey - Key in WIRE_COLORS (red, black, blue, green).
+   * @param {string} colorKey - Key in WIRE_COLORS (red, gray, blue, green).
    * @param {{ selectable?: boolean, bends?: Array<{x: number, y: number}>, recordHistory?: boolean }} [wireOpts] - Wire options.
    */
   function addWire(from, to, colorKey, wireOpts) {
@@ -422,11 +484,13 @@ function createWireManager(layer, options) {
       pushHistory();
     }
 
+    const patternIndex = countWiresWithColor(colorKey);
     const wire = {
       id: "wire-" + wires.length + "-" + Date.now(),
       from: from,
       to: to,
       colorKey: colorKey,
+      patternIndex: patternIndex,
       bends: bends,
       handles: [],
       selectable: selectable,
@@ -437,6 +501,7 @@ function createWireManager(layer, options) {
       points: buildPoints(wire),
       stroke: stroke,
       strokeWidth: 3,
+      dash: dashForPatternIndex(patternIndex),
       lineCap: "round",
       lineJoin: "round",
       hitStrokeWidth: 16,
@@ -480,12 +545,14 @@ function createWireManager(layer, options) {
     if (options.recordHistory !== false && !restoring) {
       pushHistory();
     }
+    const colorKey = wire.colorKey;
     destroyBendHandles(wire);
     wire.line.destroy();
     wires.splice(index, 1);
     if (selectedWire === wire) {
       selectedWire = null;
     }
+    reassignPatternsForColor(colorKey);
     notifyChange();
     layer.batchDraw();
   }

@@ -45,7 +45,7 @@ The canvas is built with [Konva](https://konvajs.org/). Components are draggable
 | Component | Role |
 | --- | --- |
 | Power source | 120V supply (L1, N, G) |
-| Wire | Connects terminals (red / black / blue / green); double-click to add bends |
+| Wire | Connects terminals (red / gray / blue / green); double-click to add bends |
 | Switch / doorbell button | Momentary contact when pressed |
 | Chime | Front, Trans, and Rear terminals; Rear is shared by Rear and Side buttons |
 | Terminal block | Junction points for branching wires |

@@ -285,6 +285,22 @@ function bootCircuitLab(host, config) {
       wireManager.updateWirePositions();
     });
 
+    group.on("mouseenter", function (evt) {
+      if (isTerminalTarget(evt.target)) {
+        return;
+      }
+      stage.container().style.cursor = "grab";
+    });
+    group.on("mouseleave", function () {
+      stage.container().style.cursor = "default";
+    });
+    group.on("dragstart", function () {
+      stage.container().style.cursor = "grabbing";
+    });
+    group.on("dragend", function () {
+      stage.container().style.cursor = "grab";
+    });
+
     if (group.terminals) {
       for (let i = 0; i < group.terminals.length; i += 1) {
         bindTerminal(group.terminals[i]);
@@ -297,17 +313,39 @@ function bootCircuitLab(host, config) {
   }
 
   /**
-   * Binds click handling for wire drawing on a terminal.
+   * Returns whether a Konva event target is a terminal (or its handle).
+   * @param {Konva.Node} target - Event target node.
+   */
+  function isTerminalTarget(target) {
+    if (!target || !target.name) {
+      return false;
+    }
+    const name = target.name();
+    return name === "terminal" || name === "terminal-handle";
+  }
+
+  /**
+   * Binds slide + click handling on a terminal.
    * @param {object} terminal - Terminal metadata.
    */
   function bindTerminal(terminal) {
-    terminal.node.on("click tap", function (evt) {
+    const handle = terminal.handle || terminal.node;
+
+    handle.on("terminalslide", function () {
+      wireManager.updateWirePositions();
+    });
+
+    handle.on("click tap", function (evt) {
       evt.cancelBubble = true;
+      if (terminal.didSlide) {
+        terminal.didSlide = false;
+        return;
+      }
       wireManager.clearWireSelection();
       if (mode === "lab") {
         if (!wireManager.hasPendingTerminal()) {
           const color = terminal.wireColor;
-          if (color && color !== "gray" && WIRE_COLORS[color]) {
+          if (color && wireColorGroup.querySelector('[data-color="' + color + '"]')) {
             setWireColor(color);
           }
         }
@@ -315,10 +353,10 @@ function bootCircuitLab(host, config) {
       }
     });
 
-    terminal.node.on("mouseenter", function () {
-      stage.container().style.cursor = mode === "lab" ? "crosshair" : "default";
+    handle.on("mouseenter", function () {
+      stage.container().style.cursor = mode === "lab" ? "crosshair" : "grab";
     });
-    terminal.node.on("mouseleave", function () {
+    handle.on("mouseleave", function () {
       stage.container().style.cursor = "default";
     });
   }
@@ -330,7 +368,7 @@ function bootCircuitLab(host, config) {
    */
   function setButtonPressedVisual(button, pressed) {
     button.isPressed = pressed;
-    const shell = button.findOne("Rect");
+    const shell = button.findOne(".component-shell") || button.findOne("Rect");
     if (shell) {
       shell.fill(pressed ? "#dbeafe" : "#ffffff");
       shell.stroke(pressed ? "#2563eb" : "#a1a1aa");
@@ -369,12 +407,20 @@ function bootCircuitLab(host, config) {
    */
   function bindButton(button) {
     button.on("mousedown touchstart", function (evt) {
-      if (evt.target && evt.target.name && evt.target.name() === "terminal") {
+      if (isTerminalTarget(evt.target)) {
         return;
       }
-      evt.cancelBubble = true;
+      // Do not cancelBubble — the white box must still start a group drag.
       setButtonPressedVisual(button, true);
       handleButtonPress(button);
+    });
+
+    button.on("dragstart", function () {
+      if (!button.isPressed) {
+        return;
+      }
+      setButtonPressedVisual(button, false);
+      handleButtonRelease();
     });
 
     button.on("mouseup touchend mouseleave", function () {
@@ -404,7 +450,7 @@ function bootCircuitLab(host, config) {
 
   /**
    * Updates the active wire color swatch.
-   * @param {string} colorKey - red, black, blue, or green.
+   * @param {string} colorKey - red, gray, blue, or green.
    */
   function setWireColor(colorKey) {
     if (!WIRE_COLORS[colorKey]) {

@@ -50,17 +50,17 @@ demo:
   wires:
     # 120V: power → terminal block → transformer
     - { from: power.l1, to: terminalBlock.l1, color: blue }
-    - { from: power.n, to: terminalBlock.n, color: black }
+    - { from: power.n, to: terminalBlock.n, color: gray }
     - { from: power.g, to: terminalBlock.g, color: green }
     - { from: terminalBlock.l1, to: transformer.pri-l1, color: blue }
-    - { from: terminalBlock.n, to: transformer.pri-n, color: black }
+    - { from: terminalBlock.n, to: transformer.pri-n, color: gray }
     - { from: terminalBlock.g, to: transformer.pri-g, color: green }
     # 24V: transformer hot → chime Trans; COM → buttons
     - { from: transformer.sec-hot, to: chime.trans, color: red }
-    - { from: transformer.sec-com, to: terminalBlock.com, color: black }
-    - { from: terminalBlock.com, to: buttonFront.com, color: black }
-    - { from: terminalBlock.com, to: buttonRear.com, color: black }
-    - { from: terminalBlock.com, to: buttonSide.com, color: black }
+    - { from: transformer.sec-com, to: terminalBlock.com, color: gray }
+    - { from: terminalBlock.com, to: buttonFront.com, color: gray }
+    - { from: terminalBlock.com, to: buttonRear.com, color: gray }
+    - { from: terminalBlock.com, to: buttonSide.com, color: gray }
     # Front own path; Rear + Side share Rear chime
     - { from: buttonFront.sig, to: terminalBlock.sig-f, color: red }
     - { from: terminalBlock.sig-f, to: chime.front, color: red }
