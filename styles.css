@@ -17,7 +17,20 @@ body {
   background: #f4f4f5;
 }
 
-#toolbar {
+circuit-lab {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.circuit-lab-ui {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.lab-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -28,7 +41,7 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
-#toolbar h1 {
+.lab-toolbar h1 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
@@ -91,26 +104,26 @@ body {
   cursor: not-allowed;
 }
 
-#btn-test {
+.lab-btn-test {
   background: #16a34a;
   border-color: #16a34a;
   color: #fff;
   font-weight: 600;
 }
 
-#btn-test:hover:not(:disabled) {
+.lab-btn-test:hover:not(:disabled) {
   background: #15803d;
   border-color: #15803d;
 }
 
-#btn-check {
+.lab-btn-check {
   background: #7c3aed;
   border-color: #7c3aed;
   color: #fff;
   font-weight: 600;
 }
 
-#btn-check:hover:not(:disabled) {
+.lab-btn-check:hover:not(:disabled) {
   background: #6d28d9;
   border-color: #6d28d9;
 }
@@ -151,7 +164,7 @@ body {
   background: #16a34a;
 }
 
-#hint {
+.lab-hint {
   flex: 1 1 220px;
   margin: 0;
   font-size: 12px;
@@ -160,23 +173,31 @@ body {
   min-width: 0;
 }
 
-#hint.pass {
+.lab-hint.pass {
   color: #15803d;
   font-weight: 600;
 }
 
-#hint.fail {
+.lab-hint.fail {
   color: #b91c1c;
   font-weight: 600;
 }
 
-#stage-wrap {
+.lab-stage-wrap {
+  flex: 1 1 auto;
   width: 100%;
-  height: calc(100% - var(--toolbar-height, 52px));
+  min-height: 0;
 }
 
-#container {
+.lab-stage {
   width: 100%;
   height: 100%;
   background: #fafafa;
+}
+
+/* YAML config scripts inside circuit-lab are data, not UI */
+circuit-lab > script[type="text/yaml"],
+circuit-lab > script[type="application/yaml"],
+circuit-lab > script[type="text/x-yaml"] {
+  display: none;
 }

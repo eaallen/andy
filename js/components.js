@@ -524,21 +524,56 @@ function findTerminal(component, terminalId) {
 }
 
 /**
- * Creates all doorbell lab components at diagram-aligned default positions.
- * @param {number} stageWidth - Konva stage width for horizontal centering.
- * @param {number} stageHeight - Konva stage height for vertical layout.
+ * Creates a single component instance from a normalized YAML component entry.
+ * @param {{ id: string, type: string, label?: string, x: number, y: number }} entry - Resolved component.
  */
-function createDefaultLayout(stageWidth, stageHeight) {
-  const centerX = stageWidth / 2;
-  const margin = 40;
+function makeComponentFromEntry(entry) {
+  const type = entry.type;
+  if (type === COMPONENT_TYPES.POWER || type === "power") {
+    return makePower(entry.x, entry.y);
+  }
+  if (type === COMPONENT_TYPES.TRANSFORMER || type === "transformer") {
+    return makeTransformer(entry.x, entry.y);
+  }
+  if (type === COMPONENT_TYPES.CHIME || type === "chime") {
+    return makeChime(entry.x, entry.y);
+  }
+  if (type === COMPONENT_TYPES.TERMINAL_BLOCK || type === "terminal-block" || type === "terminalBlock") {
+    return makeTerminalBlock(entry.x, entry.y);
+  }
+  if (type === COMPONENT_TYPES.BUTTON || type === "button") {
+    const label = entry.label || entry.id;
+    return makeButton(label, entry.x, entry.y);
+  }
+  throw new Error('Unknown component type "' + type + '" for id "' + entry.id + '".');
+}
 
-  return {
-    chime: makeChime(margin, margin),
-    transformer: makeTransformer(stageWidth - margin - 150, margin),
-    terminalBlock: makeTerminalBlock(centerX - 140, stageHeight * 0.42),
-    power: makePower(margin, stageHeight - margin - 88),
-    buttonFront: makeButton("Front", centerX - 160, stageHeight - margin - 78),
-    buttonRear: makeButton("Rear", centerX - 48, stageHeight - margin - 78),
-    buttonSide: makeButton("Side", centerX + 64, stageHeight - margin - 78),
+/**
+ * Builds a component map from a normalized lab config and stage size.
+ * @param {{ components: Array<object>, margin: number }} config - Normalized lab config.
+ * @param {number} stageWidth - Konva stage width.
+ * @param {number} stageHeight - Konva stage height.
+ * @param {(value: number|string, axis: "x"|"y", stage: object) => number} resolveCoord - Coordinate resolver.
+ */
+function createLayoutFromConfig(config, stageWidth, stageHeight, resolveCoord) {
+  const stage = {
+    width: stageWidth,
+    height: stageHeight,
+    margin: config.margin,
   };
+  const map = {};
+
+  for (let i = 0; i < config.components.length; i += 1) {
+    const entry = config.components[i];
+    const resolved = {
+      id: entry.id,
+      type: entry.type,
+      label: entry.label,
+      x: resolveCoord(entry.x, "x", stage),
+      y: resolveCoord(entry.y, "y", stage),
+    };
+    map[entry.id] = makeComponentFromEntry(resolved);
+  }
+
+  return map;
 }

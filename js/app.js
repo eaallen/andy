@@ -1,12 +1,13 @@
-/* global Konva, createDefaultLayout, findTerminal, createWireManager,
-   createCircuitSimulator, createSoundPlayer, createGrader, WIRE_COLORS */
+/* global Konva, createLayoutFromConfig, findTerminal, createWireManager,
+   createCircuitSimulator, createSoundPlayer, createGrader, WIRE_COLORS,
+   resolveCoord */
 
-(function () {
-  const HINT_DEMO =
-    "Demo: press Front for one sound; Rear and Side share the other (as in a typical residential chime). Double-click a wire to bend it; Undo (Ctrl/Cmd+Z) reverses wire edits.";
-  const HINT_LAB =
-    "Lab: wire so Front has its own path and Rear + Side share the Rear chime. Color matches the terminal you click. Undo reverses edits. Then Check to grade.";
-
+/**
+ * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
+ * @param {HTMLElement} host - Root element that contains toolbar + stage markup.
+ * @param {object} config - Normalized lab config from loadLabConfigFromElement.
+ */
+function bootCircuitLab(host, config) {
   let mode = "demo";
   let wireColor = "red";
   let components = null;
@@ -16,21 +17,27 @@
   /** @type {Array<object>|null} */
   let savedLabHistory = null;
 
-  const toolbar = document.getElementById("toolbar");
-  const hintEl = document.getElementById("hint");
-  const modeDemoBtn = document.getElementById("mode-demo");
-  const modeLabBtn = document.getElementById("mode-lab");
-  const btnTest = document.getElementById("btn-test");
-  const btnCheck = document.getElementById("btn-check");
-  const btnUndo = document.getElementById("btn-undo");
-  const wireColorGroup = document.getElementById("wire-colors");
+  const toolbar = host.querySelector("[data-lab-toolbar]");
+  const hintEl = host.querySelector("[data-lab-hint]");
+  const modeDemoBtn = host.querySelector("[data-lab-mode=\"demo\"]");
+  const modeLabBtn = host.querySelector("[data-lab-mode=\"lab\"]");
+  const btnTest = host.querySelector("[data-lab-action=\"test\"]");
+  const btnCheck = host.querySelector("[data-lab-action=\"check\"]");
+  const btnUndo = host.querySelector("[data-lab-action=\"undo\"]");
+  const wireColorGroup = host.querySelector("[data-lab-wire-colors]");
+  const stageContainer = host.querySelector("[data-lab-stage]");
+  const titleEl = host.querySelector("[data-lab-title]");
+
+  if (titleEl) {
+    titleEl.textContent = config.title;
+  }
 
   /**
    * Syncs CSS variable for stage height under the toolbar.
    */
   function syncToolbarHeight() {
     const height = toolbar ? toolbar.offsetHeight : 52;
-    document.documentElement.style.setProperty("--toolbar-height", height + "px");
+    host.style.setProperty("--toolbar-height", height + "px");
   }
 
   /**
@@ -49,9 +56,12 @@
   syncToolbarHeight();
 
   const stage = new Konva.Stage({
-    container: "container",
-    width: window.innerWidth,
-    height: Math.max(200, window.innerHeight - (toolbar ? toolbar.offsetHeight : 52)),
+    container: stageContainer,
+    width: host.clientWidth || window.innerWidth,
+    height: Math.max(
+      200,
+      (host.clientHeight || window.innerHeight) - (toolbar ? toolbar.offsetHeight : 52)
+    ),
   });
 
   const wireLayer = new Konva.Layer();
@@ -60,6 +70,27 @@
   stage.add(componentLayer);
 
   const sounds = createSoundPlayer();
+
+  /**
+   * Returns every component currently on the stage.
+   */
+  function componentList() {
+    if (!components) {
+      return [];
+    }
+    return Object.keys(components).map(function (key) {
+      return components[key];
+    });
+  }
+
+  /**
+   * Returns button components in document/config order for the test sequence.
+   */
+  function buttonList() {
+    return componentList().filter(function (component) {
+      return component && component.isSwitch;
+    });
+  }
 
   /**
    * Resolves a terminal key (componentId:terminalId) to a terminal object.
@@ -75,15 +106,7 @@
     }
     const componentId = key.slice(0, sep);
     const terminalId = key.slice(sep + 1);
-    const list = [
-      components.power,
-      components.transformer,
-      components.chime,
-      components.terminalBlock,
-      components.buttonFront,
-      components.buttonRear,
-      components.buttonSide,
-    ];
+    const list = componentList();
     for (let i = 0; i < list.length; i += 1) {
       const component = list[i];
       if (component && component.componentId === componentId) {
@@ -134,47 +157,27 @@
 
   /**
    * Adds a non-selectable reference wire (Demo mode).
-   * @param {string} fromComponent - Source component key.
-   * @param {string} fromId - Source terminal id.
-   * @param {string} toComponent - Target component key.
-   * @param {string} toId - Target terminal id.
+   * @param {{ component: string, terminal: string }} from - Source endpoint.
+   * @param {{ component: string, terminal: string }} to - Target endpoint.
    * @param {string} colorKey - Wire color key.
    */
-  function refWire(fromComponent, fromId, toComponent, toId, colorKey) {
+  function refWire(from, to, colorKey) {
     wireManager.addWire(
-      term(fromComponent, fromId),
-      term(toComponent, toId),
+      term(from.component, from.terminal),
+      term(to.component, to.terminal),
       colorKey,
       { selectable: false, recordHistory: false }
     );
   }
 
   /**
-   * Wires the correct reference circuit (Rear and Side share the Rear chime).
+   * Wires the Demo circuit from the YAML demo.wires list.
    */
   function loadReferenceWires() {
-    // 120V: power → terminal block → transformer
-    refWire("power", "l1", "terminalBlock", "l1", "blue");
-    refWire("power", "n", "terminalBlock", "n", "black");
-    refWire("power", "g", "terminalBlock", "g", "green");
-    refWire("terminalBlock", "l1", "transformer", "pri-l1", "blue");
-    refWire("terminalBlock", "n", "transformer", "pri-n", "black");
-    refWire("terminalBlock", "g", "transformer", "pri-g", "green");
-
-    // 24V: transformer hot → chime Trans; transformer COM → TB COM → buttons
-    refWire("transformer", "sec-hot", "chime", "trans", "red");
-    refWire("transformer", "sec-com", "terminalBlock", "com", "black");
-    refWire("terminalBlock", "com", "buttonFront", "com", "black");
-    refWire("terminalBlock", "com", "buttonRear", "com", "black");
-    refWire("terminalBlock", "com", "buttonSide", "com", "black");
-
-    // Front has its own path; Rear and Side join at the terminal block to chime Rear
-    refWire("buttonFront", "sig", "terminalBlock", "sig-f", "red");
-    refWire("terminalBlock", "sig-f", "chime", "front", "red");
-    refWire("buttonRear", "sig", "terminalBlock", "sig-r", "red");
-    refWire("buttonSide", "sig", "terminalBlock", "sig-s", "red");
-    refWire("terminalBlock", "sig-s", "terminalBlock", "sig-r", "red");
-    refWire("terminalBlock", "sig-r", "chime", "rear", "red");
+    for (let i = 0; i < config.demoWires.length; i += 1) {
+      const wire = config.demoWires[i];
+      refWire(wire.from, wire.to, wire.color);
+    }
   }
 
   /**
@@ -185,18 +188,14 @@
       return;
     }
 
-    components = createDefaultLayout(stage.width(), stage.height());
+    components = createLayoutFromConfig(
+      config,
+      stage.width(),
+      stage.height(),
+      resolveCoord
+    );
 
-    const list = [
-      components.chime,
-      components.transformer,
-      components.terminalBlock,
-      components.power,
-      components.buttonFront,
-      components.buttonRear,
-      components.buttonSide,
-    ];
-
+    const list = componentList();
     for (let i = 0; i < list.length; i += 1) {
       const group = list[i];
       componentLayer.add(group);
@@ -215,7 +214,7 @@
     wireManager.clearHistory();
     loadReferenceWires();
     btnCheck.disabled = true;
-    setHint(HINT_DEMO);
+    setHint(config.hints.demo);
     componentLayer.draw();
     wireLayer.draw();
   }
@@ -236,7 +235,7 @@
       wireManager.importHistory(savedLabHistory);
     }
     btnCheck.disabled = false;
-    setHint(HINT_LAB);
+    setHint(config.hints.lab);
     wireManager.updateWirePositions();
     componentLayer.draw();
     wireLayer.draw();
@@ -306,7 +305,6 @@
       evt.cancelBubble = true;
       wireManager.clearWireSelection();
       if (mode === "lab") {
-        // Match palette to the terminal when starting a new wire.
         if (!wireManager.hasPendingTerminal()) {
           const color = terminal.wireColor;
           if (color && color !== "gray" && WIRE_COLORS[color]) {
@@ -429,30 +427,24 @@
       return;
     }
 
+    const sequence = buttonList();
+    if (sequence.length === 0) {
+      return;
+    }
+
     testingSequence = true;
     const sequenceId = Date.now();
     runTestSequence.activeId = sequenceId;
     btnTest.disabled = true;
-    setHint("Testing: pressing Front, Rear, then Side…");
+    setHint("Testing: pressing buttons in sequence…");
 
-    const sequence = [
-      components.buttonFront,
-      components.buttonRear,
-      components.buttonSide,
-    ];
     let index = 0;
 
     /**
      * Returns whether this test run is still the active one.
      */
     function isActive() {
-      return (
-        testingSequence &&
-        runTestSequence.activeId === sequenceId &&
-        components &&
-        sequence[0] &&
-        sequence[0] === components.buttonFront
-      );
+      return testingSequence && runTestSequence.activeId === sequenceId && components;
     }
 
     /**
@@ -468,7 +460,7 @@
       if (index >= sequence.length) {
         testingSequence = false;
         btnTest.disabled = false;
-        setHint(mode === "demo" ? HINT_DEMO : HINT_LAB);
+        setHint(mode === "demo" ? config.hints.demo : config.hints.lab);
         handleButtonRelease();
         return;
       }
@@ -502,7 +494,7 @@
     }
     const result = grader.grade();
     if (result.pass) {
-      setHint("Pass — Front has its own chime; Rear and Side share the Rear chime.", "pass");
+      setHint(config.passMessage, "pass");
     } else {
       setHint("Fail — " + result.failures.join(" "), "fail");
     }
@@ -572,13 +564,13 @@
   });
 
   /**
-   * Resizes the stage to the available viewport under the toolbar.
+   * Resizes the stage to the available space inside the host.
    */
   function handleResize() {
     syncToolbarHeight();
     const toolbarHeight = toolbar ? toolbar.offsetHeight : 52;
-    stage.width(window.innerWidth);
-    stage.height(Math.max(200, window.innerHeight - toolbarHeight));
+    stage.width(host.clientWidth || window.innerWidth);
+    stage.height(Math.max(200, (host.clientHeight || window.innerHeight) - toolbarHeight));
     wireManager.updateWirePositions();
     stage.batchDraw();
   }
@@ -589,4 +581,4 @@
   setWireColor("red");
   ensureComponents();
   showDemoCircuit();
-})();
+}

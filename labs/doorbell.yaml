@@ -1,0 +1,70 @@
+title: Doorbell Demo Lab
+margin: 40
+passMessage: Pass — Front has its own chime; Rear and Side share the Rear chime.
+hints:
+  demo: >-
+    Demo: press Front for one sound; Rear and Side share the other
+    (as in a typical residential chime). Double-click a wire to bend it;
+    Undo (Ctrl/Cmd+Z) reverses wire edits.
+  lab: >-
+    Lab: wire so Front has its own path and Rear + Side share the Rear chime.
+    Color matches the terminal you click. Undo reverses edits. Then Check to grade.
+
+# Positions: numbers, percents ("42%"), or expressions
+# (margin, left, top, center, right, bottom) with optional +/- offset.
+components:
+  - id: chime
+    type: chime
+    x: margin
+    y: margin
+  - id: transformer
+    type: transformer
+    x: right-190
+    y: margin
+  - id: terminalBlock
+    type: terminal-block
+    x: center-140
+    y: 42%
+  - id: power
+    type: power
+    x: margin
+    y: bottom-128
+  - id: buttonFront
+    type: button
+    label: Front
+    x: center-160
+    y: bottom-118
+  - id: buttonRear
+    type: button
+    label: Rear
+    x: center-48
+    y: bottom-118
+  - id: buttonSide
+    type: button
+    label: Side
+    x: center+64
+    y: bottom-118
+
+# Demo mode starts with these wires. Lab mode starts empty (student wires it).
+demo:
+  wires:
+    # 120V: power → terminal block → transformer
+    - { from: power.l1, to: terminalBlock.l1, color: blue }
+    - { from: power.n, to: terminalBlock.n, color: black }
+    - { from: power.g, to: terminalBlock.g, color: green }
+    - { from: terminalBlock.l1, to: transformer.pri-l1, color: blue }
+    - { from: terminalBlock.n, to: transformer.pri-n, color: black }
+    - { from: terminalBlock.g, to: transformer.pri-g, color: green }
+    # 24V: transformer hot → chime Trans; COM → buttons
+    - { from: transformer.sec-hot, to: chime.trans, color: red }
+    - { from: transformer.sec-com, to: terminalBlock.com, color: black }
+    - { from: terminalBlock.com, to: buttonFront.com, color: black }
+    - { from: terminalBlock.com, to: buttonRear.com, color: black }
+    - { from: terminalBlock.com, to: buttonSide.com, color: black }
+    # Front own path; Rear + Side share Rear chime
+    - { from: buttonFront.sig, to: terminalBlock.sig-f, color: red }
+    - { from: terminalBlock.sig-f, to: chime.front, color: red }
+    - { from: buttonRear.sig, to: terminalBlock.sig-r, color: red }
+    - { from: buttonSide.sig, to: terminalBlock.sig-s, color: red }
+    - { from: terminalBlock.sig-s, to: terminalBlock.sig-r, color: red }
+    - { from: terminalBlock.sig-r, to: chime.rear, color: red }
