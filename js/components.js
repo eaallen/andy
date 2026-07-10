@@ -1,9 +1,9 @@
-/* global Konva */
+import Konva from "https://esm.sh/konva@9";
 
 /**
  * Component type identifiers used across the doorbell lab.
  */
-const COMPONENT_TYPES = {
+export const COMPONENT_TYPES = {
   POWER: "power",
   TRANSFORMER: "transformer",
   CHIME: "chime",
@@ -14,7 +14,7 @@ const COMPONENT_TYPES = {
 /**
  * Terminal role identifiers for continuity tracing and grading.
  */
-const TERMINAL_ROLES = {
+export const TERMINAL_ROLES = {
   L1: "l1",
   NEUTRAL: "neutral",
   GROUND: "ground",
@@ -28,7 +28,7 @@ const TERMINAL_ROLES = {
   JUNCTION: "junction",
 };
 
-const WIRE_COLORS = {
+export const WIRE_COLORS = {
   red: "#dc2626",
   gray: "#71717a",
   blue: "#2563eb",
@@ -51,7 +51,7 @@ function nextComponentInstanceId(prefix) {
  * Returns absolute stage coordinates for a terminal circle center.
  * @param {{ node: Konva.Circle, handle?: Konva.Group }} terminal - Terminal metadata object.
  */
-function getTerminalPosition(terminal) {
+export function getTerminalPosition(terminal) {
   if (terminal.handle) {
     return terminal.handle.getAbsolutePosition();
   }
@@ -62,7 +62,7 @@ function getTerminalPosition(terminal) {
  * Walks up from a terminal node to the component group that owns componentId.
  * @param {{ node: Konva.Circle, componentGroup?: Konva.Group }} terminal - Terminal metadata.
  */
-function getTerminalComponentGroup(terminal) {
+export function getTerminalComponentGroup(terminal) {
   if (terminal.componentGroup) {
     return terminal.componentGroup;
   }
@@ -736,7 +736,7 @@ function makeButton(label, x, y) {
  * @param {Konva.Group} component - Component group with terminals metadata.
  * @param {string} terminalId - Terminal id within the component.
  */
-function findTerminal(component, terminalId) {
+export function findTerminal(component, terminalId) {
   if (!component.terminals) {
     return null;
   }
@@ -782,7 +782,7 @@ function makeComponentFromEntry(entry) {
  * @param {number} stageHeight - Konva stage height.
  * @param {(value: number|string, axis: "x"|"y", stage: object) => number} resolveCoord - Coordinate resolver.
  */
-function createLayoutFromConfig(config, stageWidth, stageHeight, resolveCoord) {
+export function createLayoutFromConfig(config, stageWidth, stageHeight, resolveCoord) {
   const stage = {
     width: stageWidth,
     height: stageHeight,

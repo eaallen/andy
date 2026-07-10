@@ -2,7 +2,7 @@
  * Plays doorbell tones with the Web Audio API.
  * Front has a ding-dong; Rear/Side share a single lower tone.
  */
-function createSoundPlayer() {
+export function createSoundPlayer() {
   let audioCtx = null;
 
   /**

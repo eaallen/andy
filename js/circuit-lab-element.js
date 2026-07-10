@@ -1,4 +1,5 @@
-/* global loadLabConfigFromElement, bootCircuitLab */
+import { loadLabConfigFromElement } from "./lab-config.js";
+import { bootCircuitLab } from "./app.js";
 
 /**
  * Custom element that loads YAML (file or inline) and boots a Konva circuit lab.

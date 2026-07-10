@@ -1,4 +1,4 @@
-/* global jsyaml */
+import yaml from "https://esm.sh/js-yaml@4";
 
 /**
  * Reads and normalizes a circuit-lab YAML definition into a runtime config.
@@ -24,10 +24,10 @@ function findYamlScript(host) {
  * @param {string} source - Raw YAML text.
  */
 function parseLabYaml(source) {
-  if (typeof jsyaml === "undefined" || !jsyaml.load) {
+  if (!yaml || !yaml.load) {
     throw new Error("js-yaml is required to parse circuit-lab YAML.");
   }
-  const data = jsyaml.load(source);
+  const data = yaml.load(source);
   if (!data || typeof data !== "object") {
     throw new Error("Circuit lab YAML must define an object.");
   }
@@ -42,7 +42,7 @@ function parseLabYaml(source) {
  * @param {"x"|"y"} axis - Which stage axis to resolve against.
  * @param {{ width: number, height: number, margin: number }} stage - Stage metrics.
  */
-function resolveCoord(value, axis, stage) {
+export function resolveCoord(value, axis, stage) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
@@ -217,7 +217,7 @@ async function loadLabConfigFromUrl(url) {
  * Prefers src="labs/foo.yaml"; falls back to a <script type="text/yaml"> child.
  * @param {HTMLElement} host - circuit-lab element.
  */
-async function loadLabConfigFromElement(host) {
+export async function loadLabConfigFromElement(host) {
   const src = host.getAttribute("src");
   if (src) {
     return loadLabConfigFromUrl(src);

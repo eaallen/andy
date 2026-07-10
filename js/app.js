@@ -1,13 +1,21 @@
-/* global Konva, createLayoutFromConfig, findTerminal, createWireManager,
-   createCircuitSimulator, createSoundPlayer, createGrader, WIRE_COLORS,
-   resolveCoord */
+import Konva from "https://esm.sh/konva@9";
+import {
+  createLayoutFromConfig,
+  findTerminal,
+  WIRE_COLORS,
+} from "./components.js";
+import { createWireManager } from "./wires.js";
+import { createCircuitSimulator } from "./circuit.js";
+import { createSoundPlayer } from "./sounds.js";
+import { createGrader } from "./grade.js";
+import { resolveCoord } from "./lab-config.js";
 
 /**
  * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
  * @param {HTMLElement} host - Root element that contains toolbar + stage markup.
  * @param {object} config - Normalized lab config from loadLabConfigFromElement.
  */
-function bootCircuitLab(host, config) {
+export function bootCircuitLab(host, config) {
   let mode = "demo";
   let wireColor = "red";
   let components = null;

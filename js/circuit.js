@@ -1,11 +1,15 @@
-/* global TERMINAL_ROLES, COMPONENT_TYPES, getTerminalComponentGroup */
+import {
+  TERMINAL_ROLES,
+  COMPONENT_TYPES,
+  getTerminalComponentGroup,
+} from "./components.js";
 
 /**
  * Builds continuity simulation helpers for the doorbell circuit.
  * @param {() => object[]} getWires - Returns the current wire list.
  * @param {() => object} getComponents - Returns the current component map.
  */
-function createCircuitSimulator(getWires, getComponents) {
+export function createCircuitSimulator(getWires, getComponents) {
   /**
    * Builds a stable key for a terminal.
    * @param {{ node: Konva.Circle, id: string, componentGroup?: Konva.Group }} terminal - Terminal metadata.

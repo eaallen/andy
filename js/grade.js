@@ -1,4 +1,4 @@
-/* global TERMINAL_ROLES, COMPONENT_TYPES */
+import { TERMINAL_ROLES, COMPONENT_TYPES } from "./components.js";
 
 /**
  * Grades a student doorbell circuit against functional rules.
@@ -6,7 +6,7 @@
  * @param {object} simulator - Circuit simulator from createCircuitSimulator.
  * @param {() => object} getComponents - Returns the current component map.
  */
-function createGrader(simulator, getComponents) {
+export function createGrader(simulator, getComponents) {
   /**
    * Checks that all required components are present on the stage.
    */

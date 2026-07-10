@@ -1,4 +1,5 @@
-/* global Konva, WIRE_COLORS, getTerminalPosition, getTerminalComponentGroup */
+import Konva from "https://esm.sh/konva@9";
+import { WIRE_COLORS, getTerminalPosition, getTerminalComponentGroup } from "./components.js";
 
 /** Dash patterns for same-color wires (first is solid). */
 const WIRE_DASH_PATTERNS = [
@@ -17,7 +18,7 @@ const WIRE_DASH_PATTERNS = [
  * @param {Konva.Layer} layer - Layer that holds wire lines.
  * @param {{ onChange?: () => void, onHistoryChange?: (canUndo: boolean) => void, resolveTerminal?: (key: string) => object|null }} [options] - Manager options.
  */
-function createWireManager(layer, options) {
+export function createWireManager(layer, options) {
   const opts = typeof options === "function" ? { onChange: options } : options || {};
   const onChange = opts.onChange;
   const onHistoryChange = opts.onHistoryChange;
