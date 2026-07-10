@@ -3,6 +3,7 @@ import {
   createLayoutFromConfig,
   findTerminal,
   WIRE_COLORS,
+  applyDoorbellButtonVisual,
 } from "./components.js";
 import { createWireManager } from "./wires.js";
 import { createCircuitSimulator } from "./circuit.js";
@@ -297,6 +298,9 @@ export function bootCircuitLab(host, config) {
       if (isTerminalTarget(evt.target)) {
         return;
       }
+      if (group.isSwitch && isButtonPadTarget(evt.target)) {
+        return;
+      }
       stage.container().style.cursor = "grab";
     });
     group.on("mouseleave", function () {
@@ -376,11 +380,7 @@ export function bootCircuitLab(host, config) {
    */
   function setButtonPressedVisual(button, pressed) {
     button.isPressed = pressed;
-    const shell = button.findOne(".component-shell") || button.findOne("Rect");
-    if (shell) {
-      shell.fill(pressed ? "#dbeafe" : "#ffffff");
-      shell.stroke(pressed ? "#2563eb" : "#a1a1aa");
-    }
+    applyDoorbellButtonVisual(button, { pressed: pressed });
     componentLayer.batchDraw();
   }
 
@@ -410,17 +410,49 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
+   * Returns whether a Konva event target is the doorbell press pad.
+   * @param {Konva.Node} target - Event target node.
+   */
+  function isButtonPadTarget(target) {
+    if (!target || !target.name) {
+      return false;
+    }
+    return target.name() === "button-pad";
+  }
+
+  /**
    * Binds press/release interaction on a doorbell button.
    * @param {Konva.Group} button - Button component.
    */
   function bindButton(button) {
-    button.on("mousedown touchstart", function (evt) {
-      if (isTerminalTarget(evt.target)) {
-        return;
-      }
-      // Do not cancelBubble — the white box must still start a group drag.
+    const pad = button.buttonPad;
+    if (!pad) {
+      return;
+    }
+
+    pad.on("mousedown touchstart", function (evt) {
+      evt.cancelBubble = true;
       setButtonPressedVisual(button, true);
       handleButtonPress(button);
+    });
+
+    pad.on("mouseenter", function () {
+      stage.container().style.cursor = "pointer";
+      if (!button.isPressed) {
+        applyDoorbellButtonVisual(button, { hovered: true });
+        componentLayer.batchDraw();
+      }
+    });
+
+    pad.on("mouseleave", function () {
+      stage.container().style.cursor = "default";
+      applyDoorbellButtonVisual(button, { hovered: false });
+      componentLayer.batchDraw();
+      if (!button.isPressed) {
+        return;
+      }
+      setButtonPressedVisual(button, false);
+      handleButtonRelease();
     });
 
     button.on("dragstart", function () {
@@ -431,7 +463,7 @@ export function bootCircuitLab(host, config) {
       handleButtonRelease();
     });
 
-    button.on("mouseup touchend mouseleave", function () {
+    button.on("mouseup touchend", function () {
       if (!button.isPressed) {
         return;
       }
