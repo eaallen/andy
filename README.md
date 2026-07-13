@@ -12,13 +12,13 @@ Hands-on labs are a core part of the electrician prep course. Many students work
 - Provide a visual circuit editor for placing and connecting electrical components
 - Grade student work against a correct reference circuit
 - Optionally simulate the circuit so students can verify behavior before submitting
-- Support multiple exercises from lab files (YAML/JSON), starting with a doorbell system and a single-pole lamp circuit
+- Support multiple Utah exam–style exercises from lab files (YAML/JSON)
 
 ## How labs work
 
 Exercises are defined under [`public/labs/`](public/labs/). JavaScript owns component visuals and factories; each lab file owns layout, demo wires, continuity simulation, and Check grading. See the [lab authoring guide](public/labs/README.md) for the schema, component catalog, and checklist.
 
-The app shell includes a lab picker (`?lab=doorbell` or `?lab=single-pole-lamp`).
+The app shell includes a lab picker (`?lab=doorbell`, `?lab=three-way-lamp`, …).
 
 ### Modes
 
@@ -29,13 +29,14 @@ The app shell includes a lab picker (`?lab=doorbell` or `?lab=single-pole-lamp`)
 
 ## Included labs
 
-### Doorbell system
-
-Three doorbell buttons: **Front** plays one sound; **Rear** and **Side** share the other (typical residential wiring). Students place components, wire so Front has its own chime path and Rear/Side share Rear, then Check.
-
-### Single-pole lamp
-
-Power → SPST switch → lamp. Students wire 120V hot through the switch to the lamp and return neutral; the lamp lights only when the switch is closed.
+| Lab | Id | Focus |
+| --- | --- | --- |
+| Doorbell | `doorbell` | Front own chime; Rear + Side share Rear |
+| Single-pole lamp | `single-pole-lamp` | SPST switch controls a lamp |
+| Three-way lamp | `three-way-lamp` | Two 3-way switches, travelers |
+| Four-way lamp | `four-way-lamp` | Two 3-ways + middle 4-way |
+| GFCI downstream | `gfci-downstream` | LINE feed; LOAD protects a receptacle |
+| Multi-wire branch | `multi-wire-branch` | L1 + L2 loads on a shared neutral |
 
 ## Core features
 
@@ -45,13 +46,17 @@ The canvas is built with [Konva](https://konvajs.org/). Components are draggable
 
 | Component type | Role |
 | --- | --- |
-| `power` | 120V supply (L1, N, G) |
+| `power` | 120V supply (L1, N, G); set `legs: 2+` for extra hot legs |
 | `transformer` | Steps 120V down to 24V |
 | `chime` | Front, Trans, Rear terminals |
 | `terminal-block` | Junction points for branching |
 | `button` | Momentary contact when pressed |
 | `switch` | SPST toggle (click to open/close) |
+| `three-way` | SPDT traveler switch (T1 / T2) |
+| `four-way` | Cross/straight traveler switch |
 | `lamp` | Load with visual on/off |
+| `receptacle` | Duplex outlet (hot, N, G) |
+| `gfci` | GFCI with LINE and LOAD terminals |
 | Wire | Terminal-to-terminal (red / gray / blue / green); double-click to add bends |
 
 ### Grading and simulation (from lab config)
@@ -88,14 +93,13 @@ Open the URL Vite prints (usually `http://localhost:5173`). Use the Lab picker t
 
 ## Project status
 
-**Configurable multi-lab engine** — Demo/Lab/Check/Test driven by YAML (or JSON) under `public/labs/`. Doorbell and single-pole lamp labs ship as examples; new exercises using existing component types need only a lab file.
+**Utah exam starter catalog** — Demo/Lab/Check/Test driven by YAML under `public/labs/`, with doorbell, lighting (single-/3-/4-way), GFCI, and multi-wire branch labs.
 
 Next steps toward a fuller remote lab:
 
-1. More Utah exam–style exercises (3-way, 4-way, GFCI, etc.) using the existing types where possible
-2. Richer grading feedback and instructor review
-3. Optional short-circuit / open-circuit diagnostics
-4. Student submit / persistence (backend)
+1. Richer grading feedback and instructor review
+2. Optional short-circuit / open-circuit diagnostics
+3. Student submit / persistence (backend)
 
 ## Audience
 

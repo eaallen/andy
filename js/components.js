@@ -9,7 +9,11 @@ export const COMPONENT_TYPES = {
   CHIME: "chime",
   BUTTON: "button",
   SWITCH: "switch",
+  THREE_WAY: "three-way",
+  FOUR_WAY: "four-way",
   LAMP: "lamp",
+  RECEPTACLE: "receptacle",
+  GFCI: "gfci",
   TERMINAL_BLOCK: "terminalBlock",
 };
 
@@ -18,6 +22,7 @@ export const COMPONENT_TYPES = {
  */
 export const TERMINAL_ROLES = {
   L1: "l1",
+  L2: "l2",
   NEUTRAL: "neutral",
   GROUND: "ground",
   HOT_24V: "hot24v",
@@ -29,8 +34,20 @@ export const TERMINAL_ROLES = {
   BTN_SIGNAL: "btnSignal",
   SWITCH_COM: "switchCom",
   SWITCH_NO: "switchNo",
+  TRAVELER_1: "traveler1",
+  TRAVELER_2: "traveler2",
+  FOUR_WAY_A1: "fourWayA1",
+  FOUR_WAY_A2: "fourWayA2",
+  FOUR_WAY_B1: "fourWayB1",
+  FOUR_WAY_B2: "fourWayB2",
   LOAD_HOT: "loadHot",
   LOAD_NEUTRAL: "loadNeutral",
+  LINE_HOT: "lineHot",
+  LINE_NEUTRAL: "lineNeutral",
+  LINE_GROUND: "lineGround",
+  LOAD_SIDE_HOT: "loadSideHot",
+  LOAD_SIDE_NEUTRAL: "loadSideNeutral",
+  LOAD_SIDE_GROUND: "loadSideGround",
   JUNCTION: "junction",
 };
 
@@ -653,8 +670,9 @@ function addSpstToggleSymbol(group, x, y, width) {
 }
 
 /**
- * Updates an SPST switch symbol and shell for open/closed state.
- * @param {Konva.Group} sw - Switch component from makeSwitch.
+ * Updates a toggle switch symbol and shell for open/closed (or throw) state.
+ * SPST: Open / Closed. Three-way: T1 / T2. Four-way: Straight / Cross.
+ * @param {Konva.Group} sw - Switch component from a switch factory.
  * @param {{ closed?: boolean }} state - Visual state flags.
  */
 export function applySwitchVisual(sw, state) {
@@ -664,6 +682,7 @@ export function applySwitchVisual(sw, state) {
   const shell = sw.findOne(".component-shell");
   const symbol = sw.switchSymbol;
   const hint = sw.findOne(".switch-hint");
+  const kind = sw.switchKind || "spst";
 
   if (shell) {
     shell.fill(closed ? "#ecfdf5" : "#f0fdf4");
@@ -691,7 +710,13 @@ export function applySwitchVisual(sw, state) {
   }
 
   if (hint) {
-    hint.text(closed ? "Closed" : "Open");
+    if (kind === "three-way") {
+      hint.text(closed ? "T2" : "T1");
+    } else if (kind === "four-way") {
+      hint.text(closed ? "Cross" : "Straight");
+    } else {
+      hint.text(closed ? "Closed" : "Open");
+    }
     hint.fill(closed ? "#047857" : "#15803d");
   }
 }
@@ -743,13 +768,18 @@ function addGroundSymbol(group, x, y) {
 }
 
 /**
- * Creates a 120 V power source with L1, N, and G terminals (bottom-left layout).
+ * Creates a power source with configurable hot legs plus N and G.
+ * Default is one hot leg (L1). Set legs ≥ 2 for multi-wire / multi-phase feeds.
  * @param {number} x - Group x position on the stage.
  * @param {number} y - Group y position on the stage.
+ * @param {{ legs?: number }} [options] - Power options; legs defaults to 1.
  */
-function makePower(x, y) {
+function makePower(x, y, options) {
+  const legs = options && options.legs != null ? options.legs : 1;
   const group = new Konva.Group({ x: x, y: y });
-  const shell = addComponentShell(group, 110, 88, "Power");
+  const terminalCount = legs + 2;
+  const shellWidth = Math.max(110, terminalCount * 28 + 24);
+  const shell = addComponentShell(group, shellWidth, 88, "Power");
 
   addSwitchSymbol(group, shell.width / 2, 42, 36);
 
@@ -757,7 +787,7 @@ function makePower(x, y) {
     new Konva.Text({
       x: 12,
       y: 62,
-      text: "120V",
+      text: legs >= 2 ? "120/240V" : "120V",
       fontSize: 11,
       fontFamily: "system-ui, Arial, sans-serif",
       fill: "#71717a",
@@ -766,29 +796,43 @@ function makePower(x, y) {
   );
 
   const terminalY = -TERMINAL_OUTSET;
-  const spacing = shell.width / 4;
+  const spacing = shell.width / (terminalCount + 1);
   const edge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
-  const terminals = [
-    addTerminal(group, spacing, terminalY, "l1", "L1", {
-      role: TERMINAL_ROLES.L1,
-      wireColor: "blue",
-      labelPlacement: "above",
-      ...edge,
-    }),
-    addTerminal(group, spacing * 2, terminalY, "n", "N", {
+  const legColors = ["blue", "red", "blue", "red"];
+  const terminals = [];
+
+  for (let i = 1; i <= legs; i += 1) {
+    const id = "l" + i;
+    const role =
+      i === 1 ? TERMINAL_ROLES.L1 : i === 2 ? TERMINAL_ROLES.L2 : id;
+    terminals.push(
+      addTerminal(group, spacing * i, terminalY, id, "L" + i, {
+        role: role,
+        wireColor: legColors[(i - 1) % legColors.length],
+        labelPlacement: "above",
+        ...edge,
+      })
+    );
+  }
+
+  terminals.push(
+    addTerminal(group, spacing * (legs + 1), terminalY, "n", "N", {
       role: TERMINAL_ROLES.NEUTRAL,
       wireColor: "gray",
       labelPlacement: "above",
       ...edge,
-    }),
-    addTerminal(group, spacing * 3, terminalY, "g", "G", {
+    })
+  );
+  terminals.push(
+    addTerminal(group, spacing * (legs + 2), terminalY, "g", "G", {
       role: TERMINAL_ROLES.GROUND,
       wireColor: "green",
       labelPlacement: "above",
       ...edge,
-    }),
-  ];
+    })
+  );
 
+  group.powerLegs = legs;
   initComponent(group, COMPONENT_TYPES.POWER, nextComponentInstanceId("power"), terminals);
   return group;
 }
@@ -1077,33 +1121,7 @@ function makeSwitch(label, x, y) {
   const shell = addSwitchShell(group, 110, 88, title);
 
   addSpstToggleSymbol(group, shell.width / 2, 34, 40);
-
-  const hit = new Konva.Rect({
-    x: 8,
-    y: 28,
-    width: shell.width - 16,
-    height: 36,
-    fill: "rgba(0,0,0,0)",
-    name: "switch-hit",
-  });
-  group.add(hit);
-  group.switchHit = hit;
-
-  group.add(
-    new Konva.Text({
-      x: 0,
-      y: 68,
-      width: shell.width,
-      align: "center",
-      text: "Open",
-      fontSize: 10,
-      fontFamily: "system-ui, Arial, sans-serif",
-      fontStyle: "bold",
-      fill: "#15803d",
-      listening: false,
-      name: "switch-hint",
-    })
-  );
+  addSwitchHitAndHint(group, shell.width, 68, "Open");
 
   const terminalY = -TERMINAL_OUTSET;
   const leftX = shell.width / 3;
@@ -1126,6 +1144,7 @@ function makeSwitch(label, x, y) {
 
   group.isSwitch = true;
   group.isToggle = true;
+  group.switchKind = "spst";
   group.isClosed = false;
   group.isPressed = false;
 
@@ -1136,6 +1155,354 @@ function makeSwitch(label, x, y) {
     terminals
   );
   applySwitchVisual(group, { closed: false });
+  return group;
+}
+
+/**
+ * Adds the shared switch hit area and position hint text.
+ * @param {Konva.Group} group - Switch component group.
+ * @param {number} shellWidth - Shell width.
+ * @param {number} hintY - Y position for the hint label.
+ * @param {string} hintText - Initial hint text.
+ */
+function addSwitchHitAndHint(group, shellWidth, hintY, hintText) {
+  const hit = new Konva.Rect({
+    x: 8,
+    y: 28,
+    width: shellWidth - 16,
+    height: 36,
+    fill: "rgba(0,0,0,0)",
+    name: "switch-hit",
+  });
+  group.add(hit);
+  group.switchHit = hit;
+
+  group.add(
+    new Konva.Text({
+      x: 0,
+      y: hintY,
+      width: shellWidth,
+      align: "center",
+      text: hintText,
+      fontSize: 10,
+      fontFamily: "system-ui, Arial, sans-serif",
+      fontStyle: "bold",
+      fill: "#15803d",
+      listening: false,
+      name: "switch-hint",
+    })
+  );
+}
+
+/**
+ * Creates a 3-way (SPDT) toggle switch with COM, T1, and T2 terminals.
+ * Always bridges COM to T1 (open) or T2 (closed).
+ * @param {string} label - Switch label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeThreeWay(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "3-Way";
+  const shell = addSwitchShell(group, 130, 96, title);
+
+  addSpstToggleSymbol(group, shell.width / 2, 34, 44);
+  addSwitchHitAndHint(group, shell.width, 72, "T1");
+
+  const terminalY = -TERMINAL_OUTSET;
+  const spacing = shell.width / 4;
+  const edge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, spacing, terminalY, "t1", "T1", {
+      role: TERMINAL_ROLES.TRAVELER_1,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...edge,
+    }),
+    addTerminal(group, spacing * 2, terminalY, "com", "COM", {
+      role: TERMINAL_ROLES.SWITCH_COM,
+      wireColor: "blue",
+      labelPlacement: "above",
+      ...edge,
+    }),
+    addTerminal(group, spacing * 3, terminalY, "t2", "T2", {
+      role: TERMINAL_ROLES.TRAVELER_2,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...edge,
+    }),
+  ];
+
+  group.isSwitch = true;
+  group.isToggle = true;
+  group.switchKind = "three-way";
+  group.isClosed = false;
+  group.isPressed = false;
+
+  initComponent(
+    group,
+    COMPONENT_TYPES.THREE_WAY,
+    nextComponentInstanceId("three-way"),
+    terminals
+  );
+  applySwitchVisual(group, { closed: false });
+  return group;
+}
+
+/**
+ * Creates a 4-way toggle switch with traveler pairs A1/A2 and B1/B2.
+ * Open (straight): A1↔B1 and A2↔B2. Closed (cross): A1↔B2 and A2↔B1.
+ * @param {string} label - Switch label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeFourWay(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "4-Way";
+  const shell = addSwitchShell(group, 140, 110, title);
+
+  addSpstToggleSymbol(group, shell.width / 2, 40, 48);
+  addSwitchHitAndHint(group, shell.width, 86, "Straight");
+
+  const topY = -TERMINAL_OUTSET;
+  const bottomY = shell.height + TERMINAL_OUTSET;
+  const leftX = shell.width / 3;
+  const rightX = (shell.width / 3) * 2;
+  const topEdge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const bottomEdge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, leftX, topY, "a1", "A1", {
+      role: TERMINAL_ROLES.FOUR_WAY_A1,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...topEdge,
+    }),
+    addTerminal(group, rightX, topY, "a2", "A2", {
+      role: TERMINAL_ROLES.FOUR_WAY_A2,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...topEdge,
+    }),
+    addTerminal(group, leftX, bottomY, "b1", "B1", {
+      role: TERMINAL_ROLES.FOUR_WAY_B1,
+      wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
+    }),
+    addTerminal(group, rightX, bottomY, "b2", "B2", {
+      role: TERMINAL_ROLES.FOUR_WAY_B2,
+      wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
+    }),
+  ];
+
+  group.isSwitch = true;
+  group.isToggle = true;
+  group.switchKind = "four-way";
+  group.isClosed = false;
+  group.isPressed = false;
+
+  initComponent(
+    group,
+    COMPONENT_TYPES.FOUR_WAY,
+    nextComponentInstanceId("four-way"),
+    terminals
+  );
+  applySwitchVisual(group, { closed: false });
+  return group;
+}
+
+/**
+ * Creates a duplex receptacle with hot, neutral, and ground terminals.
+ * @param {string} label - Receptacle label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeReceptacle(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "Receptacle";
+  const shell = addComponentShell(group, 120, 100, title);
+
+  const cx = shell.width / 2;
+  group.add(
+    new Konva.Rect({
+      x: cx - 18,
+      y: 28,
+      width: 36,
+      height: 48,
+      fill: "#fafafa",
+      stroke: "#a1a1aa",
+      strokeWidth: 2,
+      cornerRadius: 4,
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Rect({
+      x: cx - 10,
+      y: 36,
+      width: 6,
+      height: 14,
+      fill: "#52525b",
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Rect({
+      x: cx + 4,
+      y: 36,
+      width: 6,
+      height: 14,
+      fill: "#52525b",
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Circle({
+      x: cx,
+      y: 62,
+      radius: 3,
+      fill: "#52525b",
+      listening: false,
+    })
+  );
+
+  const terminalY = shell.height + TERMINAL_OUTSET;
+  const spacing = shell.width / 4;
+  const edge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, spacing, terminalY, "hot", "Hot", {
+      role: TERMINAL_ROLES.LOAD_HOT,
+      wireColor: "red",
+      labelPlacement: "below",
+      ...edge,
+    }),
+    addTerminal(group, spacing * 2, terminalY, "n", "N", {
+      role: TERMINAL_ROLES.LOAD_NEUTRAL,
+      wireColor: "gray",
+      labelPlacement: "below",
+      ...edge,
+    }),
+    addTerminal(group, spacing * 3, terminalY, "g", "G", {
+      role: TERMINAL_ROLES.GROUND,
+      wireColor: "green",
+      labelPlacement: "below",
+      ...edge,
+    }),
+  ];
+
+  initComponent(
+    group,
+    COMPONENT_TYPES.RECEPTACLE,
+    nextComponentInstanceId("receptacle"),
+    terminals
+  );
+  return group;
+}
+
+/**
+ * Creates a GFCI receptacle with LINE and LOAD hot/neutral/ground terminals.
+ * LINE always bridges to LOAD (device not tripped) for continuity labs.
+ * @param {string} label - GFCI label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeGfci(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "GFCI";
+  const shell = addComponentShell(group, 160, 110, title);
+
+  group.add(
+    new Konva.Text({
+      x: 10,
+      y: 30,
+      text: "LINE",
+      fontSize: 10,
+      fontFamily: "system-ui, Arial, sans-serif",
+      fontStyle: "bold",
+      fill: "#b45309",
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Text({
+      x: 10,
+      y: 78,
+      text: "LOAD",
+      fontSize: 10,
+      fontFamily: "system-ui, Arial, sans-serif",
+      fontStyle: "bold",
+      fill: "#1d4ed8",
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Rect({
+      x: shell.width / 2 - 16,
+      y: 40,
+      width: 32,
+      height: 40,
+      fill: "#fafafa",
+      stroke: "#a1a1aa",
+      strokeWidth: 2,
+      cornerRadius: 4,
+      listening: false,
+    })
+  );
+
+  const topY = -TERMINAL_OUTSET;
+  const bottomY = shell.height + TERMINAL_OUTSET;
+  const spacing = shell.width / 4;
+  const topEdge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const bottomEdge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, spacing, topY, "line-hot", "Hot", {
+      role: TERMINAL_ROLES.LINE_HOT,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...topEdge,
+    }),
+    addTerminal(group, spacing * 2, topY, "line-n", "N", {
+      role: TERMINAL_ROLES.LINE_NEUTRAL,
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...topEdge,
+    }),
+    addTerminal(group, spacing * 3, topY, "line-g", "G", {
+      role: TERMINAL_ROLES.LINE_GROUND,
+      wireColor: "green",
+      labelPlacement: "above",
+      ...topEdge,
+    }),
+    addTerminal(group, spacing, bottomY, "load-hot", "Hot", {
+      role: TERMINAL_ROLES.LOAD_SIDE_HOT,
+      wireColor: "red",
+      labelPlacement: "below",
+      ...bottomEdge,
+    }),
+    addTerminal(group, spacing * 2, bottomY, "load-n", "N", {
+      role: TERMINAL_ROLES.LOAD_SIDE_NEUTRAL,
+      wireColor: "gray",
+      labelPlacement: "below",
+      ...bottomEdge,
+    }),
+    addTerminal(group, spacing * 3, bottomY, "load-g", "G", {
+      role: TERMINAL_ROLES.LOAD_SIDE_GROUND,
+      wireColor: "green",
+      labelPlacement: "below",
+      ...bottomEdge,
+    }),
+  ];
+
+  group.hasInternalBridges = true;
+
+  initComponent(
+    group,
+    COMPONENT_TYPES.GFCI,
+    nextComponentInstanceId("gfci"),
+    terminals
+  );
   return group;
 }
 
@@ -1241,7 +1608,7 @@ export function findTerminal(component, terminalId) {
  */
 export const COMPONENT_REGISTRY = {
   power: function (entry) {
-    return makePower(entry.x, entry.y);
+    return makePower(entry.x, entry.y, { legs: entry.legs });
   },
   transformer: function (entry) {
     return makeTransformer(entry.x, entry.y);
@@ -1261,14 +1628,32 @@ export const COMPONENT_REGISTRY = {
   switch: function (entry) {
     return makeSwitch(entry.label || entry.id, entry.x, entry.y);
   },
+  "three-way": function (entry) {
+    return makeThreeWay(entry.label || entry.id, entry.x, entry.y);
+  },
+  threeWay: function (entry) {
+    return makeThreeWay(entry.label || entry.id, entry.x, entry.y);
+  },
+  "four-way": function (entry) {
+    return makeFourWay(entry.label || entry.id, entry.x, entry.y);
+  },
+  fourWay: function (entry) {
+    return makeFourWay(entry.label || entry.id, entry.x, entry.y);
+  },
   lamp: function (entry) {
     return makeLamp(entry.label || entry.id, entry.x, entry.y);
+  },
+  receptacle: function (entry) {
+    return makeReceptacle(entry.label || entry.id, entry.x, entry.y);
+  },
+  gfci: function (entry) {
+    return makeGfci(entry.label || entry.id, entry.x, entry.y);
   },
 };
 
 /**
  * Creates a single component instance from a normalized YAML component entry.
- * @param {{ id: string, type: string, label?: string, x: number, y: number }} entry - Resolved component.
+ * @param {{ id: string, type: string, label?: string, x: number, y: number, legs?: number }} entry - Resolved component.
  */
 export function makeComponentFromEntry(entry) {
   const type = entry.type;
@@ -1300,6 +1685,7 @@ export function createLayoutFromConfig(config, stageWidth, stageHeight, resolveC
       id: entry.id,
       type: entry.type,
       label: entry.label,
+      legs: entry.legs,
       x: resolveCoord(entry.x, "x", stage),
       y: resolveCoord(entry.y, "y", stage),
     };

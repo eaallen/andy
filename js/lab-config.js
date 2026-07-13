@@ -5,20 +5,21 @@ import yaml from "js-yaml";
  *
  * Lab file fields (YAML or JSON — both parsed with js-yaml):
  *   title, margin, hints.{demo,lab}, passMessage
- *   components[]: { id, type, label?, x, y }
+ *   components[]: { id, type, label?, x, y, legs? } — legs only for power (default 1)
  *   demo.wires[]: { from, to, color? } or [from, to, color?]
  *     Endpoints are "componentId.terminalId".
  *   simulation (optional until the lab defines it):
- *     supply: { hot, return } — "component.terminal" refs
+ *     supply: { hot, return } — "component.terminal" or array of hots (multi-wire)
  *     loads[]: { id, requireHot, signal, feedback?: { type, profile? } }
  *     switches[]?: { id, bridges: [[a,b], ...] } — override default button bridges
  *   grading (optional until the lab defines it):
  *     required[]: component ids that must be present
  *     continuity[]: { from, to, fail? }
- *     whenClosed[]: { switch, energize: [loadId, ...] }
+ *     whenClosed[]: { switch?, closed?: [ids], energize: [loadId, ...] }
  *
  * Built-in component types (factories live in components.js):
- *   power, transformer, chime, terminal-block, button, switch, lamp
+ *   power, transformer, chime, terminal-block, button, switch, three-way,
+ *   four-way, lamp, receptacle, gfci
  */
 
 const LAB_SCRIPT_TYPES = {
@@ -280,13 +281,49 @@ function normalizeComponent(entry, index) {
     throw labConfigError('Component "' + entry.id + '" needs a type.');
   }
 
-  return {
+  const type = String(entry.type);
+  const normalized = {
     id: String(entry.id),
-    type: String(entry.type),
+    type: type,
     label: entry.label != null ? String(entry.label) : undefined,
     x: entry.x,
     y: entry.y,
   };
+
+  if (entry.legs != null || type === "power") {
+    const legs = normalizePowerLegs(entry.legs, entry.id);
+    if (type === "power") {
+      normalized.legs = legs;
+    } else if (entry.legs != null) {
+      throw labConfigError(
+        'Component "' + entry.id + '" has legs, but only type "power" supports legs.'
+      );
+    }
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalizes power hot-leg count (L1, L2, …). Default is 1.
+ * @param {unknown} rawLegs - Raw legs value from YAML.
+ * @param {string} componentId - Component id for error messages.
+ */
+function normalizePowerLegs(rawLegs, componentId) {
+  if (rawLegs == null) {
+    return 1;
+  }
+  const legs = Number(rawLegs);
+  if (!Number.isInteger(legs) || legs < 1 || legs > 4) {
+    throw labConfigError(
+      'Component "' +
+        componentId +
+        '" legs must be an integer from 1 to 4 (got ' +
+        String(rawLegs) +
+        ")."
+    );
+  }
+  return legs;
 }
 
 /**
@@ -418,7 +455,7 @@ function normalizeSimulation(raw, componentById) {
     throw labConfigError('simulation.supply is required: { hot: "comp.term", return: "comp.term" }.');
   }
   if (supplyRaw.hot == null) {
-    throw labConfigError('simulation.supply.hot is required (e.g. "transformer.sec-hot").');
+    throw labConfigError('simulation.supply.hot is required (e.g. "transformer.sec-hot" or [power.l1, power.l2]).');
   }
   if (supplyRaw.return == null) {
     throw labConfigError('simulation.supply.return is required (e.g. "transformer.sec-com").');
@@ -447,9 +484,21 @@ function normalizeSimulation(raw, componentById) {
       })
     : [];
 
+  const hotRaw = Array.isArray(supplyRaw.hot) ? supplyRaw.hot : [supplyRaw.hot];
+  if (hotRaw.length === 0) {
+    throw labConfigError("simulation.supply.hot must list at least one terminal.");
+  }
+  const hot = hotRaw.map(function (endpoint, index) {
+    return parseAndAssertEndpoint(
+      endpoint,
+      componentById,
+      "simulation.supply.hot[" + index + "]"
+    );
+  });
+
   return {
     supply: {
-      hot: parseAndAssertEndpoint(supplyRaw.hot, componentById, "simulation.supply.hot"),
+      hot: hot,
       return: parseAndAssertEndpoint(supplyRaw.return, componentById, "simulation.supply.return"),
     },
     loads: loads,
@@ -480,6 +529,7 @@ function normalizeContinuityCheck(entry, index, componentById) {
 
 /**
  * Normalizes one whenClosed grading rule.
+ * Accepts `switch: id` (legacy single) and/or `closed: [ids]` (multi-switch / all-open).
  * @param {object} entry - Raw whenClosed row.
  * @param {number} index - Row index for error messages.
  * @param {{ [id: string]: object }} componentById - Map of declared components.
@@ -488,13 +538,36 @@ function normalizeContinuityCheck(entry, index, componentById) {
 function normalizeWhenClosed(entry, index, componentById, loadIds) {
   const context = "grading.whenClosed[" + index + "]";
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-    throw labConfigError(context + " must be an object with switch and energize.");
+    throw labConfigError(
+      context + " must be an object with switch and/or closed, plus energize."
+    );
   }
-  if (!entry.switch) {
-    throw labConfigError(context + " needs switch: <component id>.");
+
+  /** @type {string[]} */
+  let closed = [];
+  if (entry.closed != null) {
+    if (!Array.isArray(entry.closed)) {
+      throw labConfigError(context + ".closed must be an array of component ids.");
+    }
+    closed = entry.closed.map(function (id, closedIndex) {
+      const componentId = String(id);
+      assertKnownComponent(
+        componentId,
+        componentById,
+        context + ".closed[" + closedIndex + "]"
+      );
+      return componentId;
+    });
+  } else if (entry.switch) {
+    const switchId = String(entry.switch);
+    assertKnownComponent(switchId, componentById, context + ".switch");
+    closed = [switchId];
+  } else {
+    throw labConfigError(
+      context +
+        " needs switch: <component id> or closed: [<component ids>] (use closed: [] for all open/default)."
+    );
   }
-  const switchId = String(entry.switch);
-  assertKnownComponent(switchId, componentById, context + ".switch");
 
   if (!Array.isArray(entry.energize)) {
     throw labConfigError(
@@ -520,10 +593,16 @@ function normalizeWhenClosed(entry, index, componentById, loadIds) {
     return id;
   });
 
-  return {
-    switch: switchId,
+  const result = {
+    closed: closed,
     energize: energize,
   };
+  if (entry.switch != null) {
+    result.switch = String(entry.switch);
+  } else if (closed.length === 1) {
+    result.switch = closed[0];
+  }
+  return result;
 }
 
 /**

@@ -37,7 +37,7 @@ function makeTerminal(componentId, id, role) {
  * @param {string} configId - Layout / config component id.
  * @param {string} type - Component type string.
  * @param {Array<{ id: string, role?: string }>} terminalDefs - Terminal definitions.
- * @param {{ isSwitch?: boolean }} [options] - Extra component flags.
+ * @param {{ isSwitch?: boolean, switchKind?: string }} [options] - Extra component flags.
  */
 function makeComponent(configId, type, terminalDefs, options) {
   const componentId = configId + "-inst";
@@ -50,6 +50,7 @@ function makeComponent(configId, type, terminalDefs, options) {
     componentType: type,
     terminals: terminals,
     isSwitch: !!(options && options.isSwitch),
+    switchKind: options && options.switchKind ? options.switchKind : undefined,
   };
   for (let i = 0; i < terminals.length; i += 1) {
     terminals[i].componentGroup = group;
@@ -543,7 +544,12 @@ function terminalIdsByComponent(config) {
   }
 
   if (config.simulation) {
-    add(config.simulation.supply.hot);
+    const hots = Array.isArray(config.simulation.supply.hot)
+      ? config.simulation.supply.hot
+      : [config.simulation.supply.hot];
+    for (let h = 0; h < hots.length; h += 1) {
+      add(hots[h]);
+    }
     add(config.simulation.supply.return);
     for (let j = 0; j < config.simulation.loads.length; j += 1) {
       add(config.simulation.loads[j].requireHot);
@@ -555,8 +561,8 @@ function terminalIdsByComponent(config) {
 }
 
 /**
- * Builds a live component/wire fixture from a normalized doorbell lab config.
- * @param {object} config - Output of normalizeLabConfig for doorbell.yaml.
+ * Builds a live component/wire fixture from a normalized lab config.
+ * @param {object} config - Output of normalizeLabConfig.
  */
 function createFixtureFromLabConfig(config) {
   const terminalsNeeded = terminalIdsByComponent(config);
@@ -569,9 +575,16 @@ function createFixtureFromLabConfig(config) {
     const terminalDefs = Object.keys(terminalMap).map(function (id) {
       return { id: id, role: roleForTerminalId(id) };
     });
-    const isSwitch = entry.type === "button" || entry.type === "switch";
+    const switchKinds = {
+      button: undefined,
+      switch: "spst",
+      "three-way": "three-way",
+      "four-way": "four-way",
+    };
+    const isSwitch = Object.prototype.hasOwnProperty.call(switchKinds, entry.type);
     components[entry.id] = makeComponent(entry.id, entry.type, terminalDefs, {
       isSwitch: isSwitch,
+      switchKind: switchKinds[entry.type],
     });
   }
 
@@ -652,5 +665,103 @@ describe("doorbell.yaml parity", () => {
     expect(config.simulation.loads.map(function (load) {
       return load.feedback && load.feedback.profile;
     })).toEqual(["dingDong", "buzz"]);
+  });
+});
+
+describe("Utah exam catalog labs", () => {
+  /**
+   * Loads a lab YAML from public/labs and normalizes it.
+   * @param {string} fileName - Lab file name under public/labs.
+   */
+  function loadLab(fileName) {
+    const yaml = readFileSync(join(root, "public/labs", fileName), "utf8");
+    return normalizeLabConfig(parseLabSource(yaml, "yaml"));
+  }
+
+  /**
+   * Grades the demo wiring for a normalized lab config.
+   * @param {object} config - Normalized lab config.
+   */
+  function gradeDemoWiring(config) {
+    const fixture = createFixtureFromLabConfig(config);
+    const simulator = createCircuitSimulator(
+      function () {
+        return fixture.wires;
+      },
+      function () {
+        return fixture.components;
+      },
+      config.simulation
+    );
+    const grader = createGrader(
+      simulator,
+      function () {
+        return fixture.components;
+      },
+      config.grading
+    );
+    return grader.grade();
+  }
+
+  it("passes Check on three-way demo wiring for all traveler combinations", () => {
+    const config = loadLab("three-way-lamp.yaml");
+    const fixture = createFixtureFromLabConfig(config);
+    const simulator = createCircuitSimulator(
+      function () {
+        return fixture.wires;
+      },
+      function () {
+        return fixture.components;
+      },
+      config.simulation
+    );
+
+    expect(simulator.simulate([]).energized.lamp).toBe(true);
+    expect(simulator.simulate(["sw1"]).energized.lamp).toBe(false);
+    expect(simulator.simulate(["sw2"]).energized.lamp).toBe(false);
+    expect(simulator.simulate(["sw1", "sw2"]).energized.lamp).toBe(true);
+    expect(gradeDemoWiring(config).pass).toBe(true);
+  });
+
+  it("passes Check on four-way demo wiring", () => {
+    const config = loadLab("four-way-lamp.yaml");
+    expect(gradeDemoWiring(config).pass).toBe(true);
+  });
+
+  it("energizes a LOAD-side receptacle through GFCI LINE↔LOAD bridges", () => {
+    const config = loadLab("gfci-downstream.yaml");
+    const fixture = createFixtureFromLabConfig(config);
+    const simulator = createCircuitSimulator(
+      function () {
+        return fixture.wires;
+      },
+      function () {
+        return fixture.components;
+      },
+      config.simulation
+    );
+
+    expect(simulator.simulate([]).energized.receptacle).toBe(true);
+    expect(gradeDemoWiring(config).pass).toBe(true);
+  });
+
+  it("energizes both multi-wire loads from L1 and L2", () => {
+    const config = loadLab("multi-wire-branch.yaml");
+    const fixture = createFixtureFromLabConfig(config);
+    const simulator = createCircuitSimulator(
+      function () {
+        return fixture.wires;
+      },
+      function () {
+        return fixture.components;
+      },
+      config.simulation
+    );
+
+    expect(simulator.simulate([]).energized).toEqual({
+      lampA: true,
+      lampB: true,
+    });
+    expect(gradeDemoWiring(config).pass).toBe(true);
   });
 });

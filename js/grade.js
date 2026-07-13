@@ -78,11 +78,18 @@ export function createGrader(simulator, getComponents, grading) {
   }
 
   /**
-   * Checks that closing one switch energizes exactly the expected load ids.
-   * @param {{ switch: string, energize: string[] }} rule - whenClosed rule from config.
+   * Checks that a set of closed switches energizes exactly the expected load ids.
+   * Supports legacy `switch` (single id) or `closed` (id list; empty = all open/default).
+   * @param {{ switch?: string, closed?: string[], energize: string[] }} rule - whenClosed rule from config.
    */
   function checkWhenClosed(rule) {
-    const result = simulator.simulate([rule.switch]);
+    const closedIds =
+      Array.isArray(rule.closed) && rule.closed.length > 0
+        ? rule.closed.slice()
+        : rule.switch
+          ? [rule.switch]
+          : [];
+    const result = simulator.simulate(closedIds);
     const lit = litLoadIds(result.energized);
     const expected = (rule.energize || []).slice().sort();
     const ok = sameIdSet(lit, expected);
@@ -90,34 +97,30 @@ export function createGrader(simulator, getComponents, grading) {
       ok: ok,
       lit: lit,
       expected: expected,
-      switchId: rule.switch,
+      switchId: rule.switch || (closedIds.length ? closedIds.join("+") : "(none)"),
+      closedIds: closedIds,
     };
   }
 
   /**
    * Builds a failure message for a failed whenClosed rule.
-   * @param {{ ok: boolean, lit: string[], expected: string[], switchId: string }} check - checkWhenClosed result.
+   * @param {{ ok: boolean, lit: string[], expected: string[], switchId: string, closedIds?: string[] }} check - checkWhenClosed result.
    */
   function whenClosedFailureMessage(check) {
+    const label =
+      check.closedIds && check.closedIds.length > 1
+        ? "Closing [" + check.closedIds.join(", ") + "]"
+        : check.closedIds && check.closedIds.length === 0
+          ? "With all switches open/default"
+          : "Closing " + check.switchId;
     if (check.lit.length === 0) {
       if (check.expected.length === 0) {
-        return (
-          "Closing " +
-          check.switchId +
-          " should leave all loads off, but the check failed unexpectedly."
-        );
+        return label + " should leave all loads off, but the check failed unexpectedly.";
       }
-      return (
-        "Closing " +
-        check.switchId +
-        " does not energize [" +
-        check.expected.join(", ") +
-        "]."
-      );
+      return label + " does not energize [" + check.expected.join(", ") + "].";
     }
     return (
-      "Closing " +
-      check.switchId +
+      label +
       " energized [" +
       check.lit.join(", ") +
       "] — expected [" +

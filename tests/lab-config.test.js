@@ -53,7 +53,7 @@ describe("lab config parsing", () => {
     });
     expect(config.simulation).toMatchObject({
       supply: {
-        hot: { component: "transformer", terminal: "sec-hot" },
+        hot: [{ component: "transformer", terminal: "sec-hot" }],
         return: { component: "transformer", terminal: "sec-com" },
       },
     });
@@ -88,10 +88,59 @@ describe("lab config parsing", () => {
       },
     ]);
     expect(config.grading.whenClosed).toEqual([
-      { switch: "buttonFront", energize: ["front"] },
-      { switch: "buttonRear", energize: ["rear"] },
-      { switch: "buttonSide", energize: ["rear"] },
+      { switch: "buttonFront", closed: ["buttonFront"], energize: ["front"] },
+      { switch: "buttonRear", closed: ["buttonRear"], energize: ["rear"] },
+      { switch: "buttonSide", closed: ["buttonSide"], energize: ["rear"] },
     ]);
+  });
+
+  it("loads and normalizes the three-way lamp lab", () => {
+    const yaml = readFileSync(join(root, "public/labs/three-way-lamp.yaml"), "utf8");
+    const config = normalizeLabConfig(parseLabSource(yaml, "yaml"));
+
+    expect(config.title).toBe("Three-Way Lamp Lab");
+    expect(config.components.map((c) => c.type)).toEqual(
+      expect.arrayContaining(["power", "three-way", "lamp"])
+    );
+    expect(config.grading.whenClosed[0]).toEqual({
+      closed: [],
+      energize: ["lamp"],
+    });
+    expect(config.grading.whenClosed[3]).toEqual({
+      closed: ["sw1", "sw2"],
+      energize: ["lamp"],
+    });
+  });
+
+  it("loads multi-wire branch with multiple supply hots", () => {
+    const yaml = readFileSync(join(root, "public/labs/multi-wire-branch.yaml"), "utf8");
+    const config = normalizeLabConfig(parseLabSource(yaml, "yaml"));
+
+    expect(config.components.find((c) => c.id === "power").legs).toBe(2);
+    expect(config.simulation.supply.hot).toEqual([
+      { component: "power", terminal: "l1" },
+      { component: "power", terminal: "l2" },
+    ]);
+    expect(config.grading.whenClosed[0].energize).toEqual(["lampA", "lampB"]);
+  });
+
+  it("defaults power legs to 1 and rejects invalid legs", () => {
+    const oneLeg = normalizeLabConfig({
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+    });
+    expect(oneLeg.components[0].legs).toBe(1);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", legs: 0, x: 0, y: 0 }],
+      })
+    ).toThrow(/legs must be an integer from 1 to 4/i);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "lamp", type: "lamp", legs: 2, x: 0, y: 0 }],
+      })
+    ).toThrow(/only type "power" supports legs/i);
   });
 
   it("rejects demo wires that reference unknown components", () => {

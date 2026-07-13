@@ -97,7 +97,7 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
   }
 
   /**
-   * Returns default closed-switch bridge edges.
+   * Returns default closed-switch bridge edges for momentary / SPST devices.
    * Buttons: COM ↔ SIG. SPST switches: COM ↔ NO.
    * @param {Konva.Group} component - Switch/button component.
    */
@@ -123,6 +123,72 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
     if (com && no) {
       return [{ from: com, to: no }];
     }
+    return [];
+  }
+
+  /**
+   * Returns always-on internal bridges (e.g. GFCI LINE↔LOAD when not tripped).
+   * @param {Konva.Group} component - Component that may expose internal paths.
+   */
+  function internalBridgeEdges(component) {
+    if (!component || component.componentType !== COMPONENT_TYPES.GFCI) {
+      return [];
+    }
+    const pairs = [
+      ["line-hot", "load-hot"],
+      ["line-n", "load-n"],
+      ["line-g", "load-g"],
+    ];
+    const edges = [];
+    for (let i = 0; i < pairs.length; i += 1) {
+      const from = findTerminal(component, pairs[i][0]);
+      const to = findTerminal(component, pairs[i][1]);
+      if (from && to) {
+        edges.push({ from: from, to: to });
+      }
+    }
+    return edges;
+  }
+
+  /**
+   * Returns traveler bridges for a 3-way or 4-way switch based on throw position.
+   * Open = T1 / straight; closed = T2 / cross.
+   * @param {Konva.Group} component - Multi-throw switch component.
+   * @param {boolean} closed - Whether the switch is in the secondary throw.
+   */
+  function multiThrowBridgeEdges(component, closed) {
+    const kind = component.switchKind || component.componentType;
+    if (kind === "three-way" || component.componentType === COMPONENT_TYPES.THREE_WAY) {
+      const com = findTerminal(component, "com");
+      const t1 = findTerminal(component, "t1");
+      const t2 = findTerminal(component, "t2");
+      if (!com) {
+        return [];
+      }
+      const traveler = closed ? t2 : t1;
+      return traveler ? [{ from: com, to: traveler }] : [];
+    }
+
+    if (kind === "four-way" || component.componentType === COMPONENT_TYPES.FOUR_WAY) {
+      const a1 = findTerminal(component, "a1");
+      const a2 = findTerminal(component, "a2");
+      const b1 = findTerminal(component, "b1");
+      const b2 = findTerminal(component, "b2");
+      if (!a1 || !a2 || !b1 || !b2) {
+        return [];
+      }
+      if (closed) {
+        return [
+          { from: a1, to: b2 },
+          { from: a2, to: b1 },
+        ];
+      }
+      return [
+        { from: a1, to: b1 },
+        { from: a2, to: b2 },
+      ];
+    }
+
     return [];
   }
 
@@ -164,19 +230,65 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
   }
 
   /**
-   * Collects switch-bridge edges for currently closed switches (by config component id).
-   * @param {string[]} closedSwitchIds - Component ids that are closed.
+   * Returns whether a component is a 3-way or 4-way (always bridges one throw).
+   * @param {Konva.Group} component - Component group.
+   */
+  function isMultiThrowSwitch(component) {
+    if (!component) {
+      return false;
+    }
+    const kind = component.switchKind;
+    return (
+      kind === "three-way" ||
+      kind === "four-way" ||
+      component.componentType === COMPONENT_TYPES.THREE_WAY ||
+      component.componentType === COMPONENT_TYPES.FOUR_WAY
+    );
+  }
+
+  /**
+   * Collects switch-bridge edges for currently closed switches (by config component id),
+   * plus always-on bridges for multi-throw switches and GFCI LINE↔LOAD.
+   * @param {string[]} closedSwitchIds - Component ids that are closed / secondary throw.
    */
   function switchBridgeEdges(closedSwitchIds) {
     const components = getComponents();
     const overrides = switchOverrideById();
     const edges = [];
     const closed = closedSwitchIds || [];
+    /** @type {{ [id: string]: boolean }} */
+    const closedSet = {};
+    for (let c = 0; c < closed.length; c += 1) {
+      closedSet[closed[c]] = true;
+    }
 
-    for (let i = 0; i < closed.length; i += 1) {
-      const id = closed[i];
+    const ids = Object.keys(components);
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = ids[i];
       const component = components[id];
       if (!component) {
+        continue;
+      }
+
+      const internal = internalBridgeEdges(component);
+      for (let n = 0; n < internal.length; n += 1) {
+        edges.push(internal[n]);
+      }
+
+      if (!component.isSwitch) {
+        continue;
+      }
+
+      const isClosed = !!closedSet[id];
+      if (isMultiThrowSwitch(component)) {
+        const multi = multiThrowBridgeEdges(component, isClosed);
+        for (let m = 0; m < multi.length; m += 1) {
+          edges.push(multi[m]);
+        }
+        continue;
+      }
+
+      if (!isClosed) {
         continue;
       }
       const bridges = bridgeEdgesForSwitch(component, overrides[id]);
@@ -232,7 +344,7 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
 
   /**
    * Simulates the circuit with the given switches closed.
-   * A load is live when its requireHot reaches supply.hot and its signal
+   * A load is live when its requireHot reaches any supply.hot and its signal
    * reaches supply.return (wires + closed-switch bridges).
    * @param {string[]} closedSwitchIds - Closed switch/button component ids.
    */
@@ -246,15 +358,30 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
       return result;
     }
 
-    const hot = resolveEndpoint(simulation.supply.hot);
+    const hotRefs = Array.isArray(simulation.supply.hot)
+      ? simulation.supply.hot
+      : simulation.supply.hot
+        ? [simulation.supply.hot]
+        : [];
     const ret = resolveEndpoint(simulation.supply.return);
-    if (!hot || !ret) {
+    const hotTerminals = [];
+    for (let h = 0; h < hotRefs.length; h += 1) {
+      const terminal = resolveEndpoint(hotRefs[h]);
+      if (terminal) {
+        hotTerminals.push(terminal);
+      }
+    }
+    if (hotTerminals.length === 0 || !ret) {
       return result;
     }
 
     const bridges = switchBridgeEdges(closedSwitchIds);
     const adjacency = buildAdjacency(bridges);
-    const fromHot = bfs(adjacency, hot);
+    /** @type {{ [key: string]: boolean }} */
+    const fromHot = {};
+    for (let i = 0; i < hotTerminals.length; i += 1) {
+      Object.assign(fromHot, bfs(adjacency, hotTerminals[i]));
+    }
     const fromReturn = bfs(adjacency, ret);
 
     result.pathKeys = Object.assign({}, fromHot);

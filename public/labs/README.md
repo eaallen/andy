@@ -67,7 +67,7 @@ A load is energized when `requireHot` can reach `supply.hot` **and** `signal` ca
 ```yaml
 simulation:
   supply:
-    hot: power.l1              # "component.terminal"
+    hot: power.l1              # or [power.l1, power.l2] for multi-wire
     return: power.n
   loads:
     - id: lamp                 # used by grading.whenClosed.energize
@@ -91,8 +91,11 @@ simulation:
 
 | Component type | Bridge |
 | --- | --- |
-| `button` | `com` ↔ `sig` |
-| `switch` | `com` ↔ `no` |
+| `button` | `com` ↔ `sig` (only while pressed) |
+| `switch` | `com` ↔ `no` (only when closed) |
+| `three-way` | Always: `com` ↔ `t1` (open) or `com` ↔ `t2` (closed) |
+| `four-way` | Always: straight `a1↔b1`,`a2↔b2` or cross `a1↔b2`,`a2↔b1` |
+| `gfci` | Always: LINE ↔ LOAD for hot, N, and G (device not tripped) |
 
 ### Grading
 
@@ -106,12 +109,17 @@ grading:
     - from: power.l1
       to: switch1.com
       fail: "Power L1 is not wired to the switch COM."
-  whenClosed:                  # close named switch; exactly these loads must be live
-    - switch: switch1
+  whenClosed:                  # close named switch(es); exactly these loads must be live
+    - switch: switch1          # legacy single-switch form
       energize: [lamp]
+    # Multi-switch / default throw (3-way, 4-way, always-on loads):
+    # - closed: []             # all open / default throw
+    #   energize: [lamp]
+    # - closed: [sw1, sw2]
+    #   energize: []
 ```
 
-`whenClosed` requires a `simulation` block so `energize` ids can be validated.
+`whenClosed` requires a `simulation` block so `energize` ids can be validated. Use `closed: []` when loads should be live with no switches thrown (GFCI, multi-wire).
 
 ## Built-in component catalog
 
@@ -119,11 +127,17 @@ Factories live in `js/components.js` (`COMPONENT_REGISTRY`). Use these `type` st
 
 ### `power`
 
-120V supply.
+120V supply by default (`l1`, `n`, `g`). Set `legs` to add more hot terminals (`l2`, `l3`, …) for multi-wire / multi-phase feeds.
+
+```yaml
+- id: power
+  type: power
+  legs: 2          # optional; default 1 → terminals l1, n, g
+```
 
 | Terminal id | Label | Typical role |
 | --- | --- | --- |
-| `l1` | L1 | Hot |
+| `l1` … `lN` | L1 … LN | Hot legs (`legs` count, default 1) |
 | `n` | N | Neutral |
 | `g` | G | Ground |
 
@@ -181,6 +195,27 @@ SPST toggle. Click toggles open/closed; when closed, bridges `com` ↔ `no`.
 | `com` | COM |
 | `no` | NO |
 
+### `three-way` (alias: `threeWay`)
+
+SPDT 3-way switch. Always bridges COM to one traveler: open → `t1`, closed → `t2`.
+
+| Terminal id | Label |
+| --- | --- |
+| `t1` | T1 |
+| `com` | COM |
+| `t2` | T2 |
+
+### `four-way` (alias: `fourWay`)
+
+4-way traveler switch between two 3-ways. Open = straight (`a1↔b1`, `a2↔b2`); closed = cross (`a1↔b2`, `a2↔b1`).
+
+| Terminal id | Label |
+| --- | --- |
+| `a1` | A1 |
+| `a2` | A2 |
+| `b1` | B1 |
+| `b2` | B2 |
+
 ### `lamp`
 
 Load with visual on/off from `feedback: { type: light }`.
@@ -189,6 +224,29 @@ Load with visual on/off from `feedback: { type: light }`.
 | --- | --- |
 | `hot` | Hot |
 | `n` | N |
+
+### `receptacle`
+
+Duplex receptacle (shared hot/neutral/ground screws).
+
+| Terminal id | Label |
+| --- | --- |
+| `hot` | Hot |
+| `n` | N |
+| `g` | G |
+
+### `gfci`
+
+GFCI receptacle with LINE and LOAD. LINE always bridges to LOAD for continuity labs (device not tripped).
+
+| Terminal id | Label | Side |
+| --- | --- | --- |
+| `line-hot` | Hot | LINE |
+| `line-n` | N | LINE |
+| `line-g` | G | LINE |
+| `load-hot` | Hot | LOAD |
+| `load-n` | N | LOAD |
+| `load-g` | G | LOAD |
 
 ## Example labs
 
@@ -200,6 +258,21 @@ Three buttons, transformer, chime. Front plays `dingDong`; Rear and Side share R
 
 Power → SPST `switch` → `lamp`. Supply is `power.l1` / `power.n`. Lamp feedback is `light`. Check requires hot through the switch and neutral return; lamp must energize only when the switch is closed.
 
+### Three-way lamp (`three-way-lamp.yaml`)
+
+Two `three-way` switches and a lamp. Travelers T1/T2 between switches; lamp on when both select the same traveler. Grading uses `closed: []` / `[sw1]` / `[sw2]` / `[sw1, sw2]`.
+
+### Four-way lamp (`four-way-lamp.yaml`)
+
+Two 3-ways with a `four-way` in the traveler path. Any switch can toggle the lamp.
+
+### GFCI downstream (`gfci-downstream.yaml`)
+
+Power → GFCI LINE; LOAD feeds a downstream `receptacle`. Check verifies LINE/LOAD wiring and that the receptacle is energized through internal bridges.
+
+### Multi-wire branch (`multi-wire-branch.yaml`)
+
+`supply.hot: [power.l1, power.l2]` feeds two lamps on a shared neutral.
 ## Authoring checklist (for humans and AI)
 
 1. Give every component a **unique `id`**.

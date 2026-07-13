@@ -1,0 +1,85 @@
+title: Three-Way Lamp Lab
+margin: 40
+passMessage: Pass — either 3-way switch toggles the lamp; both on the same traveler lights it.
+hints:
+  demo: >-
+    Demo: click either 3-way switch to change travelers (T1 ↔ T2). The lamp
+    lights when both switches select the same traveler. Double-click a wire to
+    bend it; Undo reverses wire edits.
+  lab: >-
+    Lab: wire hot to the first 3-way COM, travelers between the two switches,
+    second COM to the lamp hot, and lamp neutral back to power. Then Check.
+
+components:
+  - id: power
+    type: power
+    x: margin
+    y: center-44
+  - id: sw1
+    type: three-way
+    label: 3-Way A
+    x: center-160
+    y: center-48
+  - id: sw2
+    type: three-way
+    label: 3-Way B
+    x: center+20
+    y: center-48
+  - id: lamp
+    type: lamp
+    label: Lamp
+    x: right-140
+    y: center-48
+
+simulation:
+  supply:
+    hot: power.l1
+    return: power.n
+  loads:
+    - id: lamp
+      requireHot: lamp.hot
+      signal: lamp.n
+      feedback: { type: light }
+
+grading:
+  required:
+    - power
+    - sw1
+    - sw2
+    - lamp
+  continuity:
+    - from: power.l1
+      to: sw1.com
+      fail: "Power L1 is not wired to the first 3-way COM."
+    - from: sw1.t1
+      to: sw2.t1
+      fail: "Traveler T1 is not connected between the 3-way switches."
+    - from: sw1.t2
+      to: sw2.t2
+      fail: "Traveler T2 is not connected between the 3-way switches."
+    - from: sw2.com
+      to: lamp.hot
+      fail: "Second 3-way COM is not wired to the lamp hot."
+    - from: lamp.n
+      to: power.n
+      fail: "Lamp neutral is not wired to power neutral."
+  whenClosed:
+    # Both on T1 (default) → lamp on
+    - closed: []
+      energize: [lamp]
+    # One flipped → off
+    - closed: [sw1]
+      energize: []
+    - closed: [sw2]
+      energize: []
+    # Both on T2 → lamp on
+    - closed: [sw1, sw2]
+      energize: [lamp]
+
+demo:
+  wires:
+    - { from: power.l1, to: sw1.com, color: blue }
+    - { from: sw1.t1, to: sw2.t1, color: red }
+    - { from: sw1.t2, to: sw2.t2, color: red }
+    - { from: sw2.com, to: lamp.hot, color: blue }
+    - { from: lamp.n, to: power.n, color: gray }
