@@ -1,9 +1,12 @@
-import Konva from "https://esm.sh/konva@9";
+import Konva from "konva";
 import {
+  COMPONENT_TYPES,
   createLayoutFromConfig,
   findTerminal,
   WIRE_COLORS,
   applyDoorbellButtonVisual,
+  applyLampVisual,
+  applySwitchVisual,
 } from "./components.js";
 import { createWireManager } from "./wires.js";
 import { createCircuitSimulator } from "./circuit.js";
@@ -93,12 +96,85 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Returns button components in document/config order for the test sequence.
+   * Returns switch/button components in document/config order for the test sequence.
    */
-  function buttonList() {
+  function switchList() {
     return componentList().filter(function (component) {
       return component && component.isSwitch;
     });
+  }
+
+  /**
+   * Returns config ids of toggle switches that are currently closed.
+   */
+  function closedToggleIds() {
+    const ids = [];
+    const list = componentList();
+    for (let i = 0; i < list.length; i += 1) {
+      const component = list[i];
+      if (component && component.isToggle && component.isClosed && component.configId) {
+        ids.push(component.configId);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Finds the lamp component for a simulation load (by load id or requireHot component).
+   * @param {object} load - Normalized simulation load entry.
+   */
+  function lampForLoad(load) {
+    if (!components || !load) {
+      return null;
+    }
+    const byId = components[load.id];
+    if (byId && byId.componentType === COMPONENT_TYPES.LAMP) {
+      return byId;
+    }
+    const hotComp = load.requireHot && load.requireHot.component;
+    if (hotComp) {
+      const byHot = components[hotComp];
+      if (byHot && byHot.componentType === COMPONENT_TYPES.LAMP) {
+        return byHot;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Applies config-driven load feedback: sound profiles and/or lamp glow.
+   * @param {{ [loadId: string]: boolean }} energized - Energized map from simulate().
+   * @param {{ playSounds?: boolean }} [options] - Whether to play sound profiles.
+   */
+  function applyLoadFeedback(energized, options) {
+    const playSounds = !options || options.playSounds !== false;
+    const loads =
+      config.simulation && Array.isArray(config.simulation.loads)
+        ? config.simulation.loads
+        : [];
+
+    for (let i = 0; i < loads.length; i += 1) {
+      const load = loads[i];
+      const isLive = !!(energized && energized[load.id]);
+      const feedback = load.feedback;
+      if (!feedback) {
+        continue;
+      }
+
+      if (feedback.type === "sound") {
+        if (playSounds && isLive && feedback.profile) {
+          sounds.playProfile(feedback.profile);
+        }
+        continue;
+      }
+
+      if (feedback.type === "light") {
+        const lamp = lampForLoad(load);
+        if (lamp) {
+          applyLampVisual(lamp, { lit: isLive });
+        }
+      }
+    }
   }
 
   /**
@@ -152,8 +228,8 @@ export function bootCircuitLab(host, config) {
     return wireManager.getWires();
   }
 
-  const simulator = createCircuitSimulator(getWires, getComponents);
-  const grader = createGrader(simulator, getComponents);
+  const simulator = createCircuitSimulator(getWires, getComponents, config.simulation);
+  const grader = createGrader(simulator, getComponents, config.grading);
 
   /**
    * Looks up a terminal by component key and terminal id.
@@ -213,6 +289,20 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
+   * Opens all toggle switches and clears light feedback (used when rewiring the stage).
+   */
+  function resetSwitchAndLoadFeedback() {
+    const list = componentList();
+    for (let i = 0; i < list.length; i += 1) {
+      const component = list[i];
+      if (component && component.isToggle && component.isClosed) {
+        applySwitchVisual(component, { closed: false });
+      }
+    }
+    applyLoadFeedback({}, { playSounds: false });
+  }
+
+  /**
    * Loads Demo reference wiring (does not touch saved Lab state).
    */
   function showDemoCircuit() {
@@ -222,6 +312,7 @@ export function bootCircuitLab(host, config) {
     wireManager.clearWires();
     wireManager.clearHistory();
     loadReferenceWires();
+    resetSwitchAndLoadFeedback();
     btnCheck.disabled = true;
     setHint(config.hints.demo);
     componentLayer.draw();
@@ -243,6 +334,7 @@ export function bootCircuitLab(host, config) {
     if (savedLabHistory) {
       wireManager.importHistory(savedLabHistory);
     }
+    resetSwitchAndLoadFeedback();
     btnCheck.disabled = false;
     setHint(config.hints.lab);
     wireManager.updateWirePositions();
@@ -298,7 +390,7 @@ export function bootCircuitLab(host, config) {
       if (isTerminalTarget(evt.target)) {
         return;
       }
-      if (group.isSwitch && isButtonPadTarget(evt.target)) {
+      if (group.isSwitch && (isButtonPadTarget(evt.target) || isSwitchHitTarget(evt.target))) {
         return;
       }
       stage.container().style.cursor = "grab";
@@ -320,7 +412,11 @@ export function bootCircuitLab(host, config) {
     }
 
     if (group.isSwitch) {
-      bindButton(group);
+      if (group.isToggle) {
+        bindToggleSwitch(group);
+      } else {
+        bindButton(group);
+      }
     }
   }
 
@@ -385,27 +481,42 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Runs simulation for a pressed button and plays matching sounds.
+   * Runs simulation for a pressed button and applies config-driven load feedback.
    * @param {Konva.Group} button - Pressed button component.
    */
   function handleButtonPress(button) {
-    const result = simulator.energizeForButton(button.buttonKey);
-    simulator.highlightPath(result.pathKeys, true);
-    componentLayer.batchDraw();
-
-    const tones = ["front", "rear"];
-    for (let i = 0; i < tones.length; i += 1) {
-      if (result.energized[tones[i]]) {
-        sounds.playChime(tones[i]);
-      }
+    const closedIds = closedToggleIds();
+    if (button.configId) {
+      closedIds.push(button.configId);
     }
+    const result = simulator.simulate(closedIds);
+    simulator.highlightPath(result.pathKeys, true);
+    applyLoadFeedback(result.energized, { playSounds: true });
+    componentLayer.batchDraw();
   }
 
   /**
-   * Clears path highlight when a button is released.
+   * Clears path highlight when a button is released; keeps toggle-driven lamp state.
    */
   function handleButtonRelease() {
+    const result = simulator.simulate(closedToggleIds());
     simulator.highlightPath({}, false);
+    applyLoadFeedback(result.energized, { playSounds: false });
+    componentLayer.batchDraw();
+  }
+
+  /**
+   * Toggles an SPST switch, re-simulates, and applies load feedback.
+   * @param {Konva.Group} sw - Toggle switch component.
+   */
+  function handleToggleSwitch(sw) {
+    applySwitchVisual(sw, { closed: !sw.isClosed });
+    const result = simulator.simulate(closedToggleIds());
+    const anyLive = Object.keys(result.energized || {}).some(function (id) {
+      return result.energized[id];
+    });
+    simulator.highlightPath(result.pathKeys, anyLive);
+    applyLoadFeedback(result.energized, { playSounds: true });
     componentLayer.batchDraw();
   }
 
@@ -418,6 +529,17 @@ export function bootCircuitLab(host, config) {
       return false;
     }
     return target.name() === "button-pad";
+  }
+
+  /**
+   * Returns whether a Konva event target is the SPST switch hit area.
+   * @param {Konva.Node} target - Event target node.
+   */
+  function isSwitchHitTarget(target) {
+    if (!target || !target.name) {
+      return false;
+    }
+    return target.name() === "switch-hit";
   }
 
   /**
@@ -473,6 +595,30 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
+   * Binds click-to-toggle interaction on an SPST switch.
+   * @param {Konva.Group} sw - Toggle switch component.
+   */
+  function bindToggleSwitch(sw) {
+    const hit = sw.switchHit;
+    if (!hit) {
+      return;
+    }
+
+    hit.on("click tap", function (evt) {
+      evt.cancelBubble = true;
+      handleToggleSwitch(sw);
+    });
+
+    hit.on("mouseenter", function () {
+      stage.container().style.cursor = "pointer";
+    });
+
+    hit.on("mouseleave", function () {
+      stage.container().style.cursor = "default";
+    });
+  }
+
+  /**
    * Updates mode toggle button active states.
    */
   function syncModeButtons() {
@@ -506,14 +652,14 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Runs an automated press of each doorbell button in sequence.
+   * Runs an automated press/toggle of each switch in sequence.
    */
   function runTestSequence() {
     if (testingSequence || !components) {
       return;
     }
 
-    const sequence = buttonList();
+    const sequence = switchList();
     if (sequence.length === 0) {
       return;
     }
@@ -522,7 +668,7 @@ export function bootCircuitLab(host, config) {
     const sequenceId = Date.now();
     runTestSequence.activeId = sequenceId;
     btnTest.disabled = true;
-    setHint("Testing: pressing buttons in sequence…");
+    setHint("Testing: operating switches in sequence…");
 
     let index = 0;
 
@@ -534,7 +680,7 @@ export function bootCircuitLab(host, config) {
     }
 
     /**
-     * Advances to the next button in the test sequence.
+     * Advances to the next switch/button in the test sequence.
      */
     function step() {
       if (!isActive()) {
@@ -551,10 +697,28 @@ export function bootCircuitLab(host, config) {
         return;
       }
 
-      const button = sequence[index];
+      const sw = sequence[index];
       index += 1;
-      setButtonPressedVisual(button, true);
-      handleButtonPress(button);
+
+      if (sw.isToggle) {
+        const wasClosed = !!sw.isClosed;
+        handleToggleSwitch(sw);
+        window.setTimeout(function () {
+          if (!isActive()) {
+            testingSequence = false;
+            btnTest.disabled = false;
+            return;
+          }
+          if (sw.isClosed !== wasClosed) {
+            handleToggleSwitch(sw);
+          }
+          window.setTimeout(step, 280);
+        }, 550);
+        return;
+      }
+
+      setButtonPressedVisual(sw, true);
+      handleButtonPress(sw);
 
       window.setTimeout(function () {
         if (!isActive()) {
@@ -562,7 +726,7 @@ export function bootCircuitLab(host, config) {
           btnTest.disabled = false;
           return;
         }
-        setButtonPressedVisual(button, false);
+        setButtonPressedVisual(sw, false);
         handleButtonRelease();
         window.setTimeout(step, 280);
       }, 550);

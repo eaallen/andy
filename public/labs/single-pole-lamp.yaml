@@ -1,0 +1,66 @@
+title: Single-Pole Lamp Lab
+margin: 40
+passMessage: Pass — the lamp lights only when the switch is closed.
+hints:
+  demo: >-
+    Demo: click the switch to close it and light the lamp; click again to open
+    and turn the lamp off. Double-click a wire to bend it; Undo (Ctrl/Cmd+Z)
+    reverses wire edits.
+  lab: >-
+    Lab: wire 120V hot through the SPST switch to the lamp, and return neutral
+    to power. The lamp should light only when the switch is closed. Then Check
+    to grade.
+
+# Positions: numbers, percents ("42%"), or expressions
+# (margin, left, top, center, right, bottom) with optional +/- offset.
+components:
+  - id: power
+    type: power
+    x: margin
+    y: center-44
+  - id: switch1
+    type: switch
+    label: Switch
+    x: center-55
+    y: center-44
+  - id: lamp
+    type: lamp
+    label: Lamp
+    x: right-140
+    y: center-48
+
+simulation:
+  supply:
+    hot: power.l1
+    return: power.n
+  loads:
+    - id: lamp
+      requireHot: lamp.hot
+      signal: lamp.n
+      feedback: { type: light }
+
+grading:
+  required:
+    - power
+    - switch1
+    - lamp
+  continuity:
+    - from: power.l1
+      to: switch1.com
+      fail: "Power L1 is not wired to the switch COM."
+    - from: switch1.no
+      to: lamp.hot
+      fail: "Switch NO is not wired to the lamp hot."
+    - from: lamp.n
+      to: power.n
+      fail: "Lamp neutral is not wired to power neutral."
+  whenClosed:
+    - switch: switch1
+      energize: [lamp]
+
+# Demo mode starts with these wires. Lab mode starts empty (student wires it).
+demo:
+  wires:
+    - { from: power.l1, to: switch1.com, color: blue }
+    - { from: switch1.no, to: lamp.hot, color: red }
+    - { from: lamp.n, to: power.n, color: gray }

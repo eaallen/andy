@@ -1,6 +1,6 @@
 /**
- * Plays doorbell tones with the Web Audio API.
- * Front has a ding-dong; Rear/Side share a single lower tone.
+ * Plays lab feedback tones with the Web Audio API.
+ * Profiles come from lab config (`feedback.profile`), not load ids.
  */
 export function createSoundPlayer() {
   let audioCtx = null;
@@ -54,37 +54,37 @@ export function createSoundPlayer() {
   }
 
   /**
-   * Plays the Front doorbell sound (two-tone ding-dong).
+   * Plays the ding-dong two-tone chime profile.
    */
-  function playFront() {
+  function playDingDong() {
     playTone(880, 0.22, 0, "sine");
     playTone(659, 0.35, 0.2, "sine");
   }
 
   /**
-   * Plays the Rear/Side doorbell sound (lower single buzz).
+   * Plays the single lower buzz profile.
    */
-  function playRear() {
+  function playBuzz() {
     playTone(392, 0.45, 0, "triangle");
   }
 
   /**
-   * Plays the sound for a chime path.
-   * @param {"front" | "rear"} key - Which chime path sounded.
+   * Plays a named sound profile from lab config feedback.
+   * @param {string} profile - Profile id (e.g. "dingDong", "buzz").
    */
-  function playChime(key) {
-    if (key === "front") {
-      playFront();
+  function playProfile(profile) {
+    if (profile === "dingDong") {
+      playDingDong();
       return;
     }
-    if (key === "rear") {
-      playRear();
+    if (profile === "buzz") {
+      playBuzz();
     }
   }
 
   return {
-    playFront: playFront,
-    playRear: playRear,
-    playChime: playChime,
+    playProfile: playProfile,
+    playDingDong: playDingDong,
+    playBuzz: playBuzz,
   };
 }

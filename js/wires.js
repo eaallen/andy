@@ -1,4 +1,4 @@
-import Konva from "https://esm.sh/konva@9";
+import Konva from "konva";
 import { WIRE_COLORS, getTerminalPosition, getTerminalComponentGroup } from "./components.js";
 
 /** Dash patterns for same-color wires (first is solid). */

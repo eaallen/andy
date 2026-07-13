@@ -1,0 +1,71 @@
+title: Multi-Wire Branch Circuit Lab
+margin: 40
+passMessage: Pass — L1 and L2 each feed a load; both share the same neutral return.
+hints:
+  demo: >-
+    Demo: L1 feeds Lamp A and L2 feeds Lamp B on a shared neutral (multi-wire
+    branch). Both lamps should light when wired correctly. Double-click a wire
+    to bend it; Undo reverses edits.
+  lab: >-
+    Lab: wire power L1 to Lamp A hot, L2 to Lamp B hot, and both lamp neutrals
+    to the shared power neutral. Then Check.
+
+components:
+  - id: power
+    type: power
+    legs: 2
+    x: margin
+    y: center-50
+  - id: lampA
+    type: lamp
+    label: Lamp A (L1)
+    x: center-80
+    y: center-120
+  - id: lampB
+    type: lamp
+    label: Lamp B (L2)
+    x: center-80
+    y: center+40
+
+simulation:
+  supply:
+    hot: [power.l1, power.l2]
+    return: power.n
+  loads:
+    - id: lampA
+      requireHot: lampA.hot
+      signal: lampA.n
+      feedback: { type: light }
+    - id: lampB
+      requireHot: lampB.hot
+      signal: lampB.n
+      feedback: { type: light }
+
+grading:
+  required:
+    - power
+    - lampA
+    - lampB
+  continuity:
+    - from: power.l1
+      to: lampA.hot
+      fail: "Power L1 is not wired to Lamp A hot."
+    - from: power.l2
+      to: lampB.hot
+      fail: "Power L2 is not wired to Lamp B hot."
+    - from: lampA.n
+      to: power.n
+      fail: "Lamp A neutral is not wired to the shared power neutral."
+    - from: lampB.n
+      to: power.n
+      fail: "Lamp B neutral is not wired to the shared power neutral."
+  whenClosed:
+    - closed: []
+      energize: [lampA, lampB]
+
+demo:
+  wires:
+    - { from: power.l1, to: lampA.hot, color: blue }
+    - { from: power.l2, to: lampB.hot, color: red }
+    - { from: lampA.n, to: power.n, color: gray }
+    - { from: lampB.n, to: power.n, color: gray }

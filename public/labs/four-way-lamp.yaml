@@ -1,0 +1,105 @@
+title: Four-Way Lamp Lab
+margin: 40
+passMessage: Pass — any of the three switches can toggle the lamp from either end or the middle.
+hints:
+  demo: >-
+    Demo: click either 3-way or the middle 4-way (Straight ↔ Cross). The lamp
+    lights when the traveler path is complete. Double-click a wire to bend it;
+    Undo reverses edits.
+  lab: >-
+    Lab: wire two 3-ways with a 4-way between them on the travelers, then lamp
+    and neutral. Toggle any switch to control the light. Then Check.
+
+components:
+  - id: power
+    type: power
+    x: margin
+    y: center-50
+  - id: sw1
+    type: three-way
+    label: 3-Way A
+    x: center-220
+    y: center-54
+  - id: sw4
+    type: four-way
+    label: 4-Way
+    x: center-40
+    y: center-60
+  - id: sw2
+    type: three-way
+    label: 3-Way B
+    x: center+140
+    y: center-54
+  - id: lamp
+    type: lamp
+    label: Lamp
+    x: right-140
+    y: center-54
+
+simulation:
+  supply:
+    hot: power.l1
+    return: power.n
+  loads:
+    - id: lamp
+      requireHot: lamp.hot
+      signal: lamp.n
+      feedback: { type: light }
+
+grading:
+  required:
+    - power
+    - sw1
+    - sw4
+    - sw2
+    - lamp
+  continuity:
+    - from: power.l1
+      to: sw1.com
+      fail: "Power L1 is not wired to the first 3-way COM."
+    - from: sw1.t1
+      to: sw4.a1
+      fail: "First 3-way T1 is not wired to 4-way A1."
+    - from: sw1.t2
+      to: sw4.a2
+      fail: "First 3-way T2 is not wired to 4-way A2."
+    - from: sw4.b1
+      to: sw2.t1
+      fail: "4-way B1 is not wired to the second 3-way T1."
+    - from: sw4.b2
+      to: sw2.t2
+      fail: "4-way B2 is not wired to the second 3-way T2."
+    - from: sw2.com
+      to: lamp.hot
+      fail: "Second 3-way COM is not wired to the lamp hot."
+    - from: lamp.n
+      to: power.n
+      fail: "Lamp neutral is not wired to power neutral."
+  whenClosed:
+    # Defaults: both 3-ways on T1, 4-way straight → on
+    - closed: []
+      energize: [lamp]
+    - closed: [sw1]
+      energize: []
+    - closed: [sw4]
+      energize: []
+    - closed: [sw2]
+      energize: []
+    - closed: [sw1, sw2]
+      energize: [lamp]
+    - closed: [sw1, sw4]
+      energize: [lamp]
+    - closed: [sw2, sw4]
+      energize: [lamp]
+    - closed: [sw1, sw2, sw4]
+      energize: []
+
+demo:
+  wires:
+    - { from: power.l1, to: sw1.com, color: blue }
+    - { from: sw1.t1, to: sw4.a1, color: red }
+    - { from: sw1.t2, to: sw4.a2, color: red }
+    - { from: sw4.b1, to: sw2.t1, color: red }
+    - { from: sw4.b2, to: sw2.t2, color: red }
+    - { from: sw2.com, to: lamp.hot, color: blue }
+    - { from: lamp.n, to: power.n, color: gray }

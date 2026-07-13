@@ -3,12 +3,90 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Doorbell Demo Lab</title>
+    <title>Circuit Lab</title>
     <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="js/circuit-lab-element.js"></script>
   </head>
   <body>
-    <circuit-lab src="labs/doorbell.yaml"></circuit-lab>
+    <div class="app-shell">
+      <nav class="lab-picker" aria-label="Choose lab">
+        <label class="lab-picker-label" for="lab-select">Lab</label>
+        <select id="lab-select" class="lab-picker-select"></select>
+      </nav>
+      <div id="lab-root" class="lab-root"></div>
+    </div>
 
+    <script type="module">
+      import "./js/circuit-lab-element.js";
+
+      const LABS = [
+        {
+          id: "doorbell",
+          src: "labs/doorbell.yaml",
+          label: "Doorbell Demo",
+        },
+        {
+          id: "single-pole-lamp",
+          src: "labs/single-pole-lamp.yaml",
+          label: "Single-Pole Lamp",
+        },
+        {
+          id: "three-way-lamp",
+          src: "labs/three-way-lamp.yaml",
+          label: "Three-Way Lamp",
+        },
+        {
+          id: "four-way-lamp",
+          src: "labs/four-way-lamp.yaml",
+          label: "Four-Way Lamp",
+        },
+        {
+          id: "gfci-downstream",
+          src: "labs/gfci-downstream.yaml",
+          label: "GFCI Downstream",
+        },
+        {
+          id: "multi-wire-branch",
+          src: "labs/multi-wire-branch.yaml",
+          label: "Multi-Wire Branch",
+        },
+      ];
+
+      /**
+       * Resolves the lab entry from the ?lab= query param (defaults to first lab).
+       */
+      function currentLab() {
+        const key = new URLSearchParams(location.search).get("lab");
+        for (let i = 0; i < LABS.length; i += 1) {
+          if (LABS[i].id === key) {
+            return LABS[i];
+          }
+        }
+        return LABS[0];
+      }
+
+      const lab = currentLab();
+      document.title = lab.label;
+
+      const select = document.getElementById("lab-select");
+      for (let i = 0; i < LABS.length; i += 1) {
+        const option = document.createElement("option");
+        option.value = LABS[i].id;
+        option.textContent = LABS[i].label;
+        if (LABS[i].id === lab.id) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      }
+
+      select.addEventListener("change", function () {
+        const next = new URL(location.href);
+        next.searchParams.set("lab", select.value);
+        location.assign(next.toString());
+      });
+
+      const host = document.createElement("circuit-lab");
+      host.setAttribute("src", lab.src);
+      document.getElementById("lab-root").appendChild(host);
+    </script>
   </body>
 </html>

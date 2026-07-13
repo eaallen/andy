@@ -1,0 +1,74 @@
+title: GFCI Downstream Protection Lab
+margin: 40
+passMessage: Pass — power feeds GFCI LINE; the downstream receptacle is protected on LOAD.
+hints:
+  demo: >-
+    Demo: LINE is fed from power; LOAD feeds the downstream receptacle. The
+    GFCI bridges LINE to LOAD (device not tripped). Double-click a wire to bend
+    it; Undo reverses edits.
+  lab: >-
+    Lab: wire power to the GFCI LINE terminals, then wire the LOAD terminals to
+    the downstream receptacle (hot, neutral, ground). Then Check.
+
+components:
+  - id: power
+    type: power
+    x: margin
+    y: center-55
+  - id: gfci
+    type: gfci
+    label: GFCI
+    x: center-80
+    y: center-60
+  - id: receptacle
+    type: receptacle
+    label: Downstream
+    x: right-160
+    y: center-55
+
+simulation:
+  supply:
+    hot: power.l1
+    return: power.n
+  loads:
+    - id: receptacle
+      requireHot: receptacle.hot
+      signal: receptacle.n
+      feedback: { type: light }
+
+grading:
+  required:
+    - power
+    - gfci
+    - receptacle
+  continuity:
+    - from: power.l1
+      to: gfci.line-hot
+      fail: "Power L1 is not wired to GFCI LINE hot."
+    - from: power.n
+      to: gfci.line-n
+      fail: "Power neutral is not wired to GFCI LINE neutral."
+    - from: power.g
+      to: gfci.line-g
+      fail: "Power ground is not wired to GFCI LINE ground."
+    - from: gfci.load-hot
+      to: receptacle.hot
+      fail: "GFCI LOAD hot is not wired to the downstream receptacle hot."
+    - from: gfci.load-n
+      to: receptacle.n
+      fail: "GFCI LOAD neutral is not wired to the downstream receptacle neutral."
+    - from: gfci.load-g
+      to: receptacle.g
+      fail: "GFCI LOAD ground is not wired to the downstream receptacle ground."
+  whenClosed:
+    - closed: []
+      energize: [receptacle]
+
+demo:
+  wires:
+    - { from: power.l1, to: gfci.line-hot, color: blue }
+    - { from: power.n, to: gfci.line-n, color: gray }
+    - { from: power.g, to: gfci.line-g, color: green }
+    - { from: gfci.load-hot, to: receptacle.hot, color: red }
+    - { from: gfci.load-n, to: receptacle.n, color: gray }
+    - { from: gfci.load-g, to: receptacle.g, color: green }

@@ -12,29 +12,31 @@ Hands-on labs are a core part of the electrician prep course. Many students work
 - Provide a visual circuit editor for placing and connecting electrical components
 - Grade student work against a correct reference circuit
 - Optionally simulate the circuit so students can verify behavior before submitting
-- Ship a concrete demo lab: a multi-doorbell system (Front vs shared Rear/Side sounds)
+- Support multiple Utah exam–style exercises from lab files (YAML/JSON)
 
-## Demo lab: doorbell system
+## How labs work
 
-The first exercise is a doorbell circuit with **three doorbell buttons**. **Front** plays one sound; **Rear** and **Side** share the other (typical residential wiring). Students must:
+Exercises are defined under [`public/labs/`](public/labs/). JavaScript owns component visuals and factories; each lab file owns layout, demo wires, continuity simulation, and Check grading. See the [lab authoring guide](public/labs/README.md) for the schema, component catalog, and checklist.
 
-1. Place the required components (power source, doorbells/buttons, chimes or sound devices, wiring)
-2. Wire the circuit so Front triggers its own sound and Rear/Side share the Rear chime path
-3. Test the circuit (via simulation or graded checks)
-4. Submit for grading
-
-This exercise covers switches, parallel/branch wiring, and verifying that each input maps to the correct output — skills that transfer to other residential wiring labs.
+The app shell includes a lab picker (`?lab=doorbell`, `?lab=three-way-lamp`, …).
 
 ### Modes
 
 | Mode | What it does |
 | --- | --- |
-| **Demo** | Pre-wired reference circuit matching a residential doorbell schematic. Press Front for one tone; Rear and Side share the other. |
-| **Lab** | Same components start unwired. Draw terminal-to-terminal wires, press buttons to test continuity, then **Check** for pass/fail grading. |
+| **Demo** | Pre-wired reference circuit from the lab file. Press buttons / toggle switches to exercise simulation feedback. |
+| **Lab** | Same components start unwired. Draw terminal-to-terminal wires, test continuity, then **Check** for pass/fail grading. |
 
-### Diagram note
+## Included labs
 
-The layout follows a hand-drawn residential doorbell schematic (power → terminal block → transformer → chime + three buttons). Rear and Side both land on the **Rear** chime terminal.
+| Lab | Id | Focus |
+| --- | --- | --- |
+| Doorbell | `doorbell` | Front own chime; Rear + Side share Rear |
+| Single-pole lamp | `single-pole-lamp` | SPST switch controls a lamp |
+| Three-way lamp | `three-way-lamp` | Two 3-way switches, travelers |
+| Four-way lamp | `four-way-lamp` | Two 3-ways + middle 4-way |
+| GFCI downstream | `gfci-downstream` | LINE feed; LOAD protects a receptacle |
+| Multi-wire branch | `multi-wire-branch` | L1 + L2 loads on a shared neutral |
 
 ## Core features
 
@@ -42,62 +44,65 @@ The layout follows a hand-drawn residential doorbell schematic (power → termin
 
 The canvas is built with [Konva](https://konvajs.org/). Components are draggable groups with labeled terminals; wires connect terminal to terminal.
 
-| Component | Role |
+| Component type | Role |
 | --- | --- |
-| Power source | 120V supply (L1, N, G) |
-| Wire | Connects terminals (red / gray / blue / green); double-click to add bends |
-| Switch / doorbell button | Momentary contact when pressed |
-| Chime | Front, Trans, and Rear terminals; Rear is shared by Rear and Side buttons |
-| Terminal block | Junction points for branching wires |
-| Transformer | Steps 120V down to 24V for the chime circuit |
+| `power` | 120V supply (L1, N, G); set `legs: 2+` for extra hot legs |
+| `transformer` | Steps 120V down to 24V |
+| `chime` | Front, Trans, Rear terminals |
+| `terminal-block` | Junction points for branching |
+| `button` | Momentary contact when pressed |
+| `switch` | SPST toggle (click to open/close) |
+| `three-way` | SPDT traveler switch (T1 / T2) |
+| `four-way` | Cross/straight traveler switch |
+| `lamp` | Load with visual on/off |
+| `receptacle` | Duplex outlet (hot, N, G) |
+| `gfci` | GFCI with LINE and LOAD terminals |
+| Wire | Terminal-to-terminal (red / gray / blue / green); double-click to add bends |
 
-### Grading (Lab mode)
+### Grading and simulation (from lab config)
 
-**Check** compares behavior to the expected solution:
-
-- Are all required components present?
-- Is chime Trans powered from the transformer 24V hot?
-- Does Front energize only the Front chime path?
-- Do Rear and Side each energize only the Rear chime path (shared)?
-
-### Circuit simulation
-
-On button press, the lab traces continuity through wires and the closed switch:
-
-- Transformer 24V hot → chime Trans, and return through the pressed button to 24V common
-- Matching chime tone plays; live terminals highlight briefly
-- **Test** runs Front → Rear → Side in sequence
+**Check** and continuity simulation read `grading` and `simulation` from the lab file — not hardcoded component ids. Changing expectations or load mapping is a lab-file edit. Details: [public/labs/README.md](public/labs/README.md).
 
 ## Tech stack
 
 - **HTML / CSS / JavaScript** — app shell and lab logic
+- **[Vite](https://vitejs.dev/)** — local dev server and production build
+- **[Vitest](https://vitest.dev/)** — unit tests for lab config, circuit, and grading
+- **[js-yaml](https://github.com/nodeca/js-yaml)** — parses YAML and JSON lab definitions
 - **[Konva](https://konvajs.org/)** — 2D canvas for components, wires, and interaction
-- **Web Audio API** — Front ding-dong and shared Rear/Side tone (no sound files)
+- **Web Audio API** — sound profiles from lab config (no sound files)
 
 ## Getting started
 
-Open the app locally (no build step):
-
 ```bash
-# from the project root — any static server works, e.g.:
-npx serve .
-# or open index.html directly in a browser
+npm install
+npm run dev
 ```
 
-Then open the served URL (or `index.html`) in a browser.
+Open the URL Vite prints (usually `http://localhost:5173`). Use the Lab picker to switch exercises.
+
+### Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the Vite dev server |
+| `npm run build` | Build a production bundle into `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm test` | Run Vitest once |
+| `npm run test:watch` | Re-run tests on file changes |
 
 ## Project status
 
-**Doorbell demo lab** — Konva circuit editor with Demo and Lab modes, terminal-based wiring, continuity simulation, two chime sounds (Front vs shared Rear/Side), and simple Lab grading.
+**Utah exam starter catalog** — Demo/Lab/Check/Test driven by YAML under `public/labs/`, with doorbell, lighting (single-/3-/4-way), GFCI, and multi-wire branch labs.
 
 Next steps toward a fuller remote lab:
 
-1. More lab exercises beyond the doorbell circuit
-2. Richer grading feedback and instructor review
-3. Optional short-circuit / open-circuit diagnostics
-4. Student submit / persistence (backend)
+1. Richer grading feedback and instructor review
+2. Optional short-circuit / open-circuit diagnostics
+3. Student submit / persistence (backend)
 
 ## Audience
 
 - **Students** — remote or in-person learners practicing residential wiring for the state exam
 - **Instructor** — USU Eastern faculty assigning labs and reviewing graded results
+- **Authors / AI** — draft new labs from the [authoring guide](public/labs/README.md) without changing core JS when types already exist
