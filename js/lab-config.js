@@ -18,8 +18,7 @@ import yaml from "js-yaml";
  *     whenClosed[]: { switch, energize: [loadId, ...] }
  *
  * Built-in component types (factories live in components.js):
- *   power, transformer, chime, terminal-block, button
- *   (switch, lamp planned — same file-only exercise model once factories exist)
+ *   power, transformer, chime, terminal-block, button, switch, lamp
  */
 
 const LAB_SCRIPT_TYPES = {

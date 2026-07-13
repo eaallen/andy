@@ -45,6 +45,41 @@ components:
     x: center+64
     y: bottom-118
 
+simulation:
+  supply:
+    hot: transformer.sec-hot
+    return: transformer.sec-com
+  loads:
+    - id: front
+      requireHot: chime.trans
+      signal: chime.front
+      feedback: { type: sound, profile: dingDong }
+    - id: rear
+      requireHot: chime.trans
+      signal: chime.rear
+      feedback: { type: sound, profile: buzz }
+
+grading:
+  required:
+    - power
+    - transformer
+    - chime
+    - terminalBlock
+    - buttonFront
+    - buttonRear
+    - buttonSide
+  continuity:
+    - from: transformer.sec-hot
+      to: chime.trans
+      fail: "Chime Trans is not powered from the transformer 24V hot."
+  whenClosed:
+    - switch: buttonFront
+      energize: [front]
+    - switch: buttonRear
+      energize: [rear]
+    - switch: buttonSide
+      energize: [rear]
+
 # Demo mode starts with these wires. Lab mode starts empty (student wires it).
 demo:
   wires:

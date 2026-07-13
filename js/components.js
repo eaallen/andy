@@ -1,13 +1,15 @@
 import Konva from "konva";
 
 /**
- * Component type identifiers used across the doorbell lab.
+ * Component type identifiers used across lab layouts.
  */
 export const COMPONENT_TYPES = {
   POWER: "power",
   TRANSFORMER: "transformer",
   CHIME: "chime",
   BUTTON: "button",
+  SWITCH: "switch",
+  LAMP: "lamp",
   TERMINAL_BLOCK: "terminalBlock",
 };
 
@@ -25,6 +27,10 @@ export const TERMINAL_ROLES = {
   CHIME_REAR: "chimeRear",
   BTN_COMMON: "btnCommon",
   BTN_SIGNAL: "btnSignal",
+  SWITCH_COM: "switchCom",
+  SWITCH_NO: "switchNo",
+  LOAD_HOT: "loadHot",
+  LOAD_NEUTRAL: "loadNeutral",
   JUNCTION: "junction",
 };
 
@@ -410,6 +416,46 @@ function addButtonShell(group, width, height, title) {
 }
 
 /**
+ * Draws a tinted shell used for SPST toggle switches.
+ * @param {Konva.Group} group - Parent component group.
+ * @param {number} width - Box width.
+ * @param {number} height - Box height.
+ * @param {string} title - Title shown at the top of the box.
+ */
+function addSwitchShell(group, width, height, title) {
+  const rect = new Konva.Rect({
+    x: 0,
+    y: 0,
+    width: width,
+    height: height,
+    fill: "#f0fdf4",
+    stroke: "#86efac",
+    strokeWidth: 2,
+    cornerRadius: 8,
+    shadowColor: "rgba(22, 163, 74, 0.12)",
+    shadowBlur: 10,
+    shadowOffsetY: 2,
+    name: "component-shell",
+  });
+
+  const titleText = new Konva.Text({
+    x: 10,
+    y: 8,
+    text: title,
+    fontSize: 13,
+    fontFamily: "system-ui, Arial, sans-serif",
+    fontStyle: "bold",
+    fill: "#166534",
+    listening: false,
+  });
+
+  group.add(rect);
+  group.add(titleText);
+
+  return { width: width, height: height };
+}
+
+/**
  * Draws a raised circular press pad inside a doorbell button component.
  * @param {Konva.Group} group - Parent component group.
  * @param {number} centerX - Pad center x in local coordinates.
@@ -510,6 +556,7 @@ export function applyDoorbellButtonVisual(button, state) {
 
 /**
  * Draws a simple SPST switch symbol (open contacts with actuator).
+ * Used as a static decoration (e.g. on the power source).
  * @param {Konva.Group} group - Parent group.
  * @param {number} x - Local x of symbol center.
  * @param {number} y - Local y of symbol center.
@@ -546,6 +593,131 @@ function addSwitchSymbol(group, x, y, width) {
       listening: false,
     })
   );
+}
+
+/**
+ * Draws an interactive SPST toggle symbol and stores the actuator for later updates.
+ * @param {Konva.Group} group - Parent component group.
+ * @param {number} x - Local x of symbol center.
+ * @param {number} y - Local y of symbol center.
+ * @param {number} width - Symbol width.
+ */
+function addSpstToggleSymbol(group, x, y, width) {
+  const half = width / 2;
+  const contactY = y + 6;
+  const hingeX = x - half + 10;
+  const openEndX = x + half - 4;
+  const openEndY = contactY - 10;
+  const closedEndX = x + half - 10;
+  const closedEndY = contactY;
+
+  group.add(
+    new Konva.Line({
+      points: [x - half, contactY, hingeX, contactY],
+      stroke: "#18181b",
+      strokeWidth: 2,
+      lineCap: "round",
+      listening: false,
+    })
+  );
+  group.add(
+    new Konva.Line({
+      points: [closedEndX, contactY, x + half, contactY],
+      stroke: "#18181b",
+      strokeWidth: 2,
+      lineCap: "round",
+      listening: false,
+    })
+  );
+
+  const actuator = new Konva.Line({
+    points: [hingeX, contactY, openEndX, openEndY],
+    stroke: "#18181b",
+    strokeWidth: 2,
+    lineCap: "round",
+    listening: false,
+    name: "switch-actuator",
+  });
+  group.add(actuator);
+
+  group.switchSymbol = {
+    actuator: actuator,
+    hingeX: hingeX,
+    contactY: contactY,
+    openEndX: openEndX,
+    openEndY: openEndY,
+    closedEndX: closedEndX,
+    closedEndY: closedEndY,
+  };
+  return actuator;
+}
+
+/**
+ * Updates an SPST switch symbol and shell for open/closed state.
+ * @param {Konva.Group} sw - Switch component from makeSwitch.
+ * @param {{ closed?: boolean }} state - Visual state flags.
+ */
+export function applySwitchVisual(sw, state) {
+  const closed = !!state.closed;
+  sw.isClosed = closed;
+  sw.isPressed = closed;
+  const shell = sw.findOne(".component-shell");
+  const symbol = sw.switchSymbol;
+  const hint = sw.findOne(".switch-hint");
+
+  if (shell) {
+    shell.fill(closed ? "#ecfdf5" : "#f0fdf4");
+    shell.stroke(closed ? "#059669" : "#86efac");
+  }
+
+  if (symbol && symbol.actuator) {
+    if (closed) {
+      symbol.actuator.points([
+        symbol.hingeX,
+        symbol.contactY,
+        symbol.closedEndX,
+        symbol.closedEndY,
+      ]);
+      symbol.actuator.stroke("#059669");
+    } else {
+      symbol.actuator.points([
+        symbol.hingeX,
+        symbol.contactY,
+        symbol.openEndX,
+        symbol.openEndY,
+      ]);
+      symbol.actuator.stroke("#18181b");
+    }
+  }
+
+  if (hint) {
+    hint.text(closed ? "Closed" : "Open");
+    hint.fill(closed ? "#047857" : "#15803d");
+  }
+}
+
+/**
+ * Updates a lamp bulb glow for energized / off state.
+ * @param {Konva.Group} lamp - Lamp component from makeLamp.
+ * @param {{ lit?: boolean }} state - Visual state flags.
+ */
+export function applyLampVisual(lamp, state) {
+  const lit = !!state.lit;
+  lamp.isLit = lit;
+  const bulb = lamp.lampBulb;
+  const glow = lamp.lampGlow;
+  const filament = lamp.lampFilament;
+
+  if (bulb) {
+    bulb.fill(lit ? "#fef08a" : "#f4f4f5");
+    bulb.stroke(lit ? "#ca8a04" : "#a1a1aa");
+  }
+  if (glow) {
+    glow.visible(lit);
+  }
+  if (filament) {
+    filament.stroke(lit ? "#a16207" : "#d4d4d8");
+  }
 }
 
 /**
@@ -880,6 +1052,7 @@ function makeButton(label, x, y) {
   const buttonKey = label.toLowerCase();
   group.buttonKey = buttonKey;
   group.isSwitch = true;
+  group.isToggle = false;
   group.isPressed = false;
 
   initComponent(
@@ -888,6 +1061,157 @@ function makeButton(label, x, y) {
     nextComponentInstanceId("btn-" + buttonKey),
     terminals
   );
+  return group;
+}
+
+/**
+ * Creates an SPST toggle switch with COM and NO terminals.
+ * Click toggles closed/open; when closed, COM bridges to NO.
+ * @param {string} label - Switch label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeSwitch(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "Switch";
+  const shell = addSwitchShell(group, 110, 88, title);
+
+  addSpstToggleSymbol(group, shell.width / 2, 34, 40);
+
+  const hit = new Konva.Rect({
+    x: 8,
+    y: 28,
+    width: shell.width - 16,
+    height: 36,
+    fill: "rgba(0,0,0,0)",
+    name: "switch-hit",
+  });
+  group.add(hit);
+  group.switchHit = hit;
+
+  group.add(
+    new Konva.Text({
+      x: 0,
+      y: 68,
+      width: shell.width,
+      align: "center",
+      text: "Open",
+      fontSize: 10,
+      fontFamily: "system-ui, Arial, sans-serif",
+      fontStyle: "bold",
+      fill: "#15803d",
+      listening: false,
+      name: "switch-hint",
+    })
+  );
+
+  const terminalY = -TERMINAL_OUTSET;
+  const leftX = shell.width / 3;
+  const rightX = (shell.width / 3) * 2;
+  const edge = { side: "top", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, leftX, terminalY, "com", "COM", {
+      role: TERMINAL_ROLES.SWITCH_COM,
+      wireColor: "gray",
+      labelPlacement: "above",
+      ...edge,
+    }),
+    addTerminal(group, rightX, terminalY, "no", "NO", {
+      role: TERMINAL_ROLES.SWITCH_NO,
+      wireColor: "red",
+      labelPlacement: "above",
+      ...edge,
+    }),
+  ];
+
+  group.isSwitch = true;
+  group.isToggle = true;
+  group.isClosed = false;
+  group.isPressed = false;
+
+  initComponent(
+    group,
+    COMPONENT_TYPES.SWITCH,
+    nextComponentInstanceId("switch"),
+    terminals
+  );
+  applySwitchVisual(group, { closed: false });
+  return group;
+}
+
+/**
+ * Creates a lamp load with hot and neutral terminals.
+ * @param {string} label - Lamp label shown on the component.
+ * @param {number} x - Group x position on the stage.
+ * @param {number} y - Group y position on the stage.
+ */
+function makeLamp(label, x, y) {
+  const group = new Konva.Group({ x: x, y: y });
+  const title = label || "Lamp";
+  const shell = addComponentShell(group, 100, 96, title);
+
+  const cx = shell.width / 2;
+  const cy = 52;
+
+  const glow = new Konva.Circle({
+    x: cx,
+    y: cy,
+    radius: 22,
+    fill: "rgba(250, 204, 21, 0.35)",
+    listening: false,
+    visible: false,
+    name: "lamp-glow",
+  });
+  group.add(glow);
+
+  const bulb = new Konva.Circle({
+    x: cx,
+    y: cy,
+    radius: 16,
+    fill: "#f4f4f5",
+    stroke: "#a1a1aa",
+    strokeWidth: 2,
+    listening: false,
+    name: "lamp-bulb",
+  });
+  group.add(bulb);
+
+  const filament = new Konva.Line({
+    points: [cx - 6, cy + 2, cx, cy - 6, cx + 6, cy + 2],
+    stroke: "#d4d4d8",
+    strokeWidth: 1.5,
+    lineCap: "round",
+    lineJoin: "round",
+    listening: false,
+    name: "lamp-filament",
+  });
+  group.add(filament);
+
+  group.lampGlow = glow;
+  group.lampBulb = bulb;
+  group.lampFilament = filament;
+  group.isLit = false;
+
+  const terminalY = shell.height + TERMINAL_OUTSET;
+  const leftX = shell.width / 3;
+  const rightX = (shell.width / 3) * 2;
+  const edge = { side: "bottom", shellWidth: shell.width, shellHeight: shell.height };
+  const terminals = [
+    addTerminal(group, leftX, terminalY, "hot", "Hot", {
+      role: TERMINAL_ROLES.LOAD_HOT,
+      wireColor: "red",
+      labelPlacement: "below",
+      ...edge,
+    }),
+    addTerminal(group, rightX, terminalY, "n", "N", {
+      role: TERMINAL_ROLES.LOAD_NEUTRAL,
+      wireColor: "gray",
+      labelPlacement: "below",
+      ...edge,
+    }),
+  ];
+
+  initComponent(group, COMPONENT_TYPES.LAMP, nextComponentInstanceId("lamp"), terminals);
   return group;
 }
 
@@ -911,28 +1235,48 @@ export function findTerminal(component, terminalId) {
 }
 
 /**
+ * Registry of component type → factory. Lab files pick types from this map;
+ * new device kinds require a factory here, new exercises using existing kinds do not.
+ * @type {{ [type: string]: (entry: { id: string, type: string, label?: string, x: number, y: number }) => Konva.Group }}
+ */
+export const COMPONENT_REGISTRY = {
+  power: function (entry) {
+    return makePower(entry.x, entry.y);
+  },
+  transformer: function (entry) {
+    return makeTransformer(entry.x, entry.y);
+  },
+  chime: function (entry) {
+    return makeChime(entry.x, entry.y);
+  },
+  "terminal-block": function (entry) {
+    return makeTerminalBlock(entry.x, entry.y);
+  },
+  terminalBlock: function (entry) {
+    return makeTerminalBlock(entry.x, entry.y);
+  },
+  button: function (entry) {
+    return makeButton(entry.label || entry.id, entry.x, entry.y);
+  },
+  switch: function (entry) {
+    return makeSwitch(entry.label || entry.id, entry.x, entry.y);
+  },
+  lamp: function (entry) {
+    return makeLamp(entry.label || entry.id, entry.x, entry.y);
+  },
+};
+
+/**
  * Creates a single component instance from a normalized YAML component entry.
  * @param {{ id: string, type: string, label?: string, x: number, y: number }} entry - Resolved component.
  */
-function makeComponentFromEntry(entry) {
+export function makeComponentFromEntry(entry) {
   const type = entry.type;
-  if (type === COMPONENT_TYPES.POWER || type === "power") {
-    return makePower(entry.x, entry.y);
+  const factory = COMPONENT_REGISTRY[type];
+  if (!factory) {
+    throw new Error('Unknown component type "' + type + '" for id "' + entry.id + '".');
   }
-  if (type === COMPONENT_TYPES.TRANSFORMER || type === "transformer") {
-    return makeTransformer(entry.x, entry.y);
-  }
-  if (type === COMPONENT_TYPES.CHIME || type === "chime") {
-    return makeChime(entry.x, entry.y);
-  }
-  if (type === COMPONENT_TYPES.TERMINAL_BLOCK || type === "terminal-block" || type === "terminalBlock") {
-    return makeTerminalBlock(entry.x, entry.y);
-  }
-  if (type === COMPONENT_TYPES.BUTTON || type === "button") {
-    const label = entry.label || entry.id;
-    return makeButton(label, entry.x, entry.y);
-  }
-  throw new Error('Unknown component type "' + type + '" for id "' + entry.id + '".');
+  return factory(entry);
 }
 
 /**
@@ -959,7 +1303,9 @@ export function createLayoutFromConfig(config, stageWidth, stageHeight, resolveC
       x: resolveCoord(entry.x, "x", stage),
       y: resolveCoord(entry.y, "y", stage),
     };
-    map[entry.id] = makeComponentFromEntry(resolved);
+    const group = makeComponentFromEntry(resolved);
+    group.configId = entry.id;
+    map[entry.id] = group;
   }
 
   return map;

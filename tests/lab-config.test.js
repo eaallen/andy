@@ -51,6 +51,47 @@ describe("lab config parsing", () => {
       to: expect.objectContaining({ component: expect.any(String) }),
       color: expect.any(String),
     });
+    expect(config.simulation).toMatchObject({
+      supply: {
+        hot: { component: "transformer", terminal: "sec-hot" },
+        return: { component: "transformer", terminal: "sec-com" },
+      },
+    });
+    expect(config.simulation.loads).toEqual([
+      {
+        id: "front",
+        requireHot: { component: "chime", terminal: "trans" },
+        signal: { component: "chime", terminal: "front" },
+        feedback: { type: "sound", profile: "dingDong" },
+      },
+      {
+        id: "rear",
+        requireHot: { component: "chime", terminal: "trans" },
+        signal: { component: "chime", terminal: "rear" },
+        feedback: { type: "sound", profile: "buzz" },
+      },
+    ]);
+    expect(config.grading.required).toEqual([
+      "power",
+      "transformer",
+      "chime",
+      "terminalBlock",
+      "buttonFront",
+      "buttonRear",
+      "buttonSide",
+    ]);
+    expect(config.grading.continuity).toEqual([
+      {
+        from: { component: "transformer", terminal: "sec-hot" },
+        to: { component: "chime", terminal: "trans" },
+        fail: "Chime Trans is not powered from the transformer 24V hot.",
+      },
+    ]);
+    expect(config.grading.whenClosed).toEqual([
+      { switch: "buttonFront", energize: ["front"] },
+      { switch: "buttonRear", energize: ["rear"] },
+      { switch: "buttonSide", energize: ["rear"] },
+    ]);
   });
 
   it("rejects demo wires that reference unknown components", () => {

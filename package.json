@@ -25,7 +25,9 @@
     "konva": "^10.3.0"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
     "vite": "^8.1.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "vitest-canvas-mock": "^1.1.4"
   }
 }

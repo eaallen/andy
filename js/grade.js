@@ -1,91 +1,129 @@
-import { TERMINAL_ROLES, COMPONENT_TYPES } from "./components.js";
-
 /**
- * Grades a student doorbell circuit against functional rules.
- * Front has its own chime path; Rear and Side share the Rear chime path.
+ * Grades a student circuit from normalized config.grading rules.
  * @param {object} simulator - Circuit simulator from createCircuitSimulator.
- * @param {() => object} getComponents - Returns the current component map.
+ * @param {() => object} getComponents - Returns the current component map (config id → group).
+ * @param {object|null} grading - Normalized config.grading (required, continuity, whenClosed).
  */
-export function createGrader(simulator, getComponents) {
+export function createGrader(simulator, getComponents, grading) {
+  /**
+   * Returns load ids that are currently energized.
+   * @param {{ [loadId: string]: boolean }} energized - Energized map from simulate().
+   */
+  function litLoadIds(energized) {
+    const lit = [];
+    const ids = Object.keys(energized || {});
+    for (let i = 0; i < ids.length; i += 1) {
+      if (energized[ids[i]]) {
+        lit.push(ids[i]);
+      }
+    }
+    lit.sort();
+    return lit;
+  }
+
+  /**
+   * Returns whether two string arrays contain the same set of values.
+   * @param {string[]} a - First list.
+   * @param {string[]} b - Second list.
+   */
+  function sameIdSet(a, b) {
+    if (a.length !== b.length) {
+      return false;
+    }
+    const left = a.slice().sort();
+    const right = b.slice().sort();
+    for (let i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * Checks that all required components are present on the stage.
    */
   function checkComponentsPresent() {
+    if (!grading || !Array.isArray(grading.required)) {
+      return [];
+    }
     const components = getComponents();
-    const required = [
-      { key: "power", type: COMPONENT_TYPES.POWER, label: "Power source" },
-      { key: "transformer", type: COMPONENT_TYPES.TRANSFORMER, label: "Transformer" },
-      { key: "chime", type: COMPONENT_TYPES.CHIME, label: "Chime" },
-      { key: "terminalBlock", type: COMPONENT_TYPES.TERMINAL_BLOCK, label: "Terminal block" },
-      { key: "buttonFront", type: COMPONENT_TYPES.BUTTON, label: "Front button" },
-      { key: "buttonRear", type: COMPONENT_TYPES.BUTTON, label: "Rear button" },
-      { key: "buttonSide", type: COMPONENT_TYPES.BUTTON, label: "Side button" },
-    ];
-
     const missing = [];
-    for (let i = 0; i < required.length; i += 1) {
-      const item = required[i];
-      const component = components[item.key];
-      if (!component || component.componentType !== item.type) {
-        missing.push(item.label);
+    for (let i = 0; i < grading.required.length; i += 1) {
+      const id = grading.required[i];
+      if (!components[id]) {
+        missing.push(id);
       }
     }
-
     return missing;
   }
 
   /**
-   * Checks that transformer 24V hot reaches the chime Trans terminal.
+   * Runs wire-only continuity checks from config.grading.continuity.
    */
-  function checkTransPowered() {
-    const components = getComponents();
-    const hot = simulator.findTerminalByRole(
-      components.transformer,
-      TERMINAL_ROLES.HOT_24V
-    );
-    const trans = simulator.findTerminalByRole(
-      components.chime,
-      TERMINAL_ROLES.CHIME_TRANS
-    );
-    return simulator.areWiredTogether(hot, trans);
+  function checkContinuity() {
+    const failures = [];
+    if (!grading || !Array.isArray(grading.continuity)) {
+      return failures;
+    }
+    for (let i = 0; i < grading.continuity.length; i += 1) {
+      const check = grading.continuity[i];
+      const from = simulator.resolveEndpoint(check.from);
+      const to = simulator.resolveEndpoint(check.to);
+      if (!simulator.areWiredTogether(from, to)) {
+        failures.push(check.fail);
+      }
+    }
+    return failures;
   }
 
   /**
-   * Expected chime tone(s) for a pressed button.
-   * @param {"front" | "rear" | "side"} buttonKey - Button under test.
+   * Checks that closing one switch energizes exactly the expected load ids.
+   * @param {{ switch: string, energize: string[] }} rule - whenClosed rule from config.
    */
-  function expectedTone(buttonKey) {
-    if (buttonKey === "front") {
-      return "front";
-    }
-    // Rear and Side share the Rear chime.
-    return "rear";
-  }
-
-  /**
-   * Checks that pressing one button energizes only the expected chime tone.
-   * @param {"front" | "rear" | "side"} buttonKey - Button under test.
-   */
-  function checkButtonIsolation(buttonKey) {
-    const result = simulator.energizeForButton(buttonKey);
-    const energized = result.energized;
-    const expected = expectedTone(buttonKey);
-    const lit = [];
-
-    if (energized.front) {
-      lit.push("front");
-    }
-    if (energized.rear) {
-      lit.push("rear");
-    }
-
-    const ok = lit.length === 1 && lit[0] === expected;
+  function checkWhenClosed(rule) {
+    const result = simulator.simulate([rule.switch]);
+    const lit = litLoadIds(result.energized);
+    const expected = (rule.energize || []).slice().sort();
+    const ok = sameIdSet(lit, expected);
     return {
       ok: ok,
       lit: lit,
       expected: expected,
-      transPowered: result.transPowered,
+      switchId: rule.switch,
     };
+  }
+
+  /**
+   * Builds a failure message for a failed whenClosed rule.
+   * @param {{ ok: boolean, lit: string[], expected: string[], switchId: string }} check - checkWhenClosed result.
+   */
+  function whenClosedFailureMessage(check) {
+    if (check.lit.length === 0) {
+      if (check.expected.length === 0) {
+        return (
+          "Closing " +
+          check.switchId +
+          " should leave all loads off, but the check failed unexpectedly."
+        );
+      }
+      return (
+        "Closing " +
+        check.switchId +
+        " does not energize [" +
+        check.expected.join(", ") +
+        "]."
+      );
+    }
+    return (
+      "Closing " +
+      check.switchId +
+      " energized [" +
+      check.lit.join(", ") +
+      "] — expected [" +
+      check.expected.join(", ") +
+      "]."
+    );
   }
 
   /**
@@ -93,41 +131,28 @@ export function createGrader(simulator, getComponents) {
    */
   function grade() {
     const failures = [];
-    const missing = checkComponentsPresent();
 
+    if (!grading) {
+      failures.push("This lab has no grading rules configured.");
+      return { pass: false, failures: failures };
+    }
+
+    const missing = checkComponentsPresent();
     if (missing.length > 0) {
       failures.push("Missing components: " + missing.join(", "));
       return { pass: false, failures: failures };
     }
 
-    if (!checkTransPowered()) {
-      failures.push("Chime Trans is not powered from the transformer 24V hot.");
+    const continuityFailures = checkContinuity();
+    for (let i = 0; i < continuityFailures.length; i += 1) {
+      failures.push(continuityFailures[i]);
     }
 
-    const buttons = ["front", "rear", "side"];
-    for (let i = 0; i < buttons.length; i += 1) {
-      const key = buttons[i];
-      const check = checkButtonIsolation(key);
+    const whenClosed = Array.isArray(grading.whenClosed) ? grading.whenClosed : [];
+    for (let j = 0; j < whenClosed.length; j += 1) {
+      const check = checkWhenClosed(whenClosed[j]);
       if (!check.ok) {
-        if (check.lit.length === 0) {
-          failures.push(
-            "Pressing " +
-              key +
-              " does not energize the " +
-              check.expected +
-              " chime path."
-          );
-        } else {
-          failures.push(
-            "Pressing " +
-              key +
-              " energized [" +
-              check.lit.join(", ") +
-              "] — expected only " +
-              check.expected +
-              "."
-          );
-        }
+        failures.push(whenClosedFailureMessage(check));
       }
     }
 
@@ -140,7 +165,7 @@ export function createGrader(simulator, getComponents) {
   return {
     grade: grade,
     checkComponentsPresent: checkComponentsPresent,
-    checkTransPowered: checkTransPowered,
-    checkButtonIsolation: checkButtonIsolation,
+    checkContinuity: checkContinuity,
+    checkWhenClosed: checkWhenClosed,
   };
 }
