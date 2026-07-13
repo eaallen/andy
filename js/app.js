@@ -1,4 +1,4 @@
-import Konva from "https://esm.sh/konva@9";
+import Konva from "konva";
 import {
   createLayoutFromConfig,
   findTerminal,

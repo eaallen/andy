@@ -1,0 +1,54 @@
+---
+description: Require Vitest coverage for core library logic shipped to CDN consumers
+alwaysApply: true
+---
+
+# Test core library code
+
+This project is a **reusable circuit-lab library** other sites may load from a CDN. Broken core behavior affects every consumer — treat important logic as must-test.
+
+## What must be tested
+
+Add or update Vitest tests in `tests/**/*.test.js` when changing:
+
+- **Public / exported APIs** — anything `export`ed from `js/` that consumers or the app depend on
+- **Pure logic** — config parsing/normalization (`lab-config.js`), continuity/simulation (`circuit.js`), grading (`grade.js`)
+- **Validation & error paths** — invalid input, unknown refs, empty sources, contract breaks
+- **Behavioral contracts** — “Front only energizes Front”, shared Rear/Side path, required components present
+
+## What can skip heavy tests
+
+Do **not** block on full canvas/UI coverage for:
+
+- Konva drawing / layout polish (`components.js` visuals, wire rendering)
+- Web Audio / sound playback (`sounds.js`)
+- One-off app shell wiring that is not part of the library contract
+
+If a change mixes UI and logic, still test the extracted pure logic.
+
+## Workflow
+
+1. Prefer pure, exportable helpers over logic buried in event handlers — easier to unit-test.
+2. Mirror existing style: `tests/<area>.test.js`, import from `../js/...`, use `describe` / `it` / `expect`.
+3. After editing core modules, run `npm test` and fix failures before finishing.
+4. New exported behavior without a test is incomplete — add a focused test in the same change.
+
+## Examples
+
+```js
+// ❌ BAD — change normalizeLabConfig / createGrader / simulator with no test update
+export function normalizeLabConfig(raw) { /* new validation */ }
+
+// ✅ GOOD — same change includes a Vitest case for the new contract
+it("rejects demo wires that reference unknown components", () => {
+  expect(() => normalizeLabConfig(raw)).toThrow(/unknown component/i);
+});
+```
+
+```js
+// ❌ BAD — important grading rule only lives inside a click handler
+button.on("click", () => { /* complex pass/fail logic */ });
+
+// ✅ GOOD — extract and test the rule; UI calls it
+export function checkFrontPath(state) { /* ... */ }
+```

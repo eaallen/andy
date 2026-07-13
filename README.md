@@ -71,20 +71,29 @@ On button press, the lab traces continuity through wires and the closed switch:
 ## Tech stack
 
 - **HTML / CSS / JavaScript** — app shell and lab logic
+- **[Vite](https://vitejs.dev/)** — local dev server and production build
+- **[Vitest](https://vitest.dev/)** — unit tests for lab config and grading helpers
 - **[Konva](https://konvajs.org/)** — 2D canvas for components, wires, and interaction
 - **Web Audio API** — Front ding-dong and shared Rear/Side tone (no sound files)
 
 ## Getting started
 
-Open the app locally (no build step):
-
 ```bash
-# from the project root — any static server works, e.g.:
-npx serve .
-# or open index.html directly in a browser
+npm install
+npm run dev
 ```
 
-Then open the served URL (or `index.html`) in a browser.
+Open the URL Vite prints (usually `http://localhost:5173`).
+
+### Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the Vite dev server |
+| `npm run build` | Build a production bundle into `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm test` | Run Vitest once |
+| `npm run test:watch` | Re-run tests on file changes |
 
 ## Project status
 

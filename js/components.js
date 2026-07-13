@@ -1,4 +1,4 @@
-import Konva from "https://esm.sh/konva@9";
+import Konva from "konva";
 
 /**
  * Component type identifiers used across the doorbell lab.
