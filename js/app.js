@@ -16,7 +16,7 @@ import { resolveCoord } from "./lab-config.js";
 
 /**
  * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
- * @param {HTMLElement} host - Root element that contains toolbar + stage markup.
+ * @param {HTMLElement} host - circuit-lab host (toolbar/stage live in host.shadowRoot when present).
  * @param {object} config - Normalized lab config from loadLabConfigFromElement.
  */
 export function bootCircuitLab(host, config) {
@@ -29,16 +29,17 @@ export function bootCircuitLab(host, config) {
   /** @type {Array<object>|null} */
   let savedLabHistory = null;
 
-  const toolbar = host.querySelector("[data-lab-toolbar]");
-  const hintEl = host.querySelector("[data-lab-hint]");
-  const modeDemoBtn = host.querySelector("[data-lab-mode=\"demo\"]");
-  const modeLabBtn = host.querySelector("[data-lab-mode=\"lab\"]");
-  const btnTest = host.querySelector("[data-lab-action=\"test\"]");
-  const btnCheck = host.querySelector("[data-lab-action=\"check\"]");
-  const btnUndo = host.querySelector("[data-lab-action=\"undo\"]");
-  const wireColorGroup = host.querySelector("[data-lab-wire-colors]");
-  const stageContainer = host.querySelector("[data-lab-stage]");
-  const titleEl = host.querySelector("[data-lab-title]");
+  const uiRoot = host.shadowRoot || host;
+  const toolbar = uiRoot.querySelector("[data-lab-toolbar]");
+  const hintEl = uiRoot.querySelector("[data-lab-hint]");
+  const modeDemoBtn = uiRoot.querySelector("[data-lab-mode=\"demo\"]");
+  const modeLabBtn = uiRoot.querySelector("[data-lab-mode=\"lab\"]");
+  const btnTest = uiRoot.querySelector("[data-lab-action=\"test\"]");
+  const btnCheck = uiRoot.querySelector("[data-lab-action=\"check\"]");
+  const btnUndo = uiRoot.querySelector("[data-lab-action=\"undo\"]");
+  const wireColorGroup = uiRoot.querySelector("[data-lab-wire-colors]");
+  const stageContainer = uiRoot.querySelector("[data-lab-stage]");
+  const titleEl = uiRoot.querySelector("[data-lab-title]");
 
   if (titleEl) {
     titleEl.textContent = config.title;

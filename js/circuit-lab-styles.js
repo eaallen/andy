@@ -1,14 +1,28 @@
-const STYLE_ELEMENT_ID = "circuit-lab-styles";
+const STYLE_ATTR = "data-circuit-lab-styles";
+const DOCUMENT_STYLE_ID = "circuit-lab-document-styles";
+const DOCUMENT_UI_STYLE_ID = "circuit-lab-styles";
 
 /**
- * CSS for the <circuit-lab> custom element UI (toolbar, stage, wire swatches).
+ * CSS for the <circuit-lab> shadow tree (toolbar, stage, wire swatches).
  * Kept as a JS string so library consumers only need the bundled JS file.
  */
 export const CIRCUIT_LAB_CSS = `
-circuit-lab {
+:host {
   display: block;
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #1a1a1a;
+  background: #fafafa;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 .circuit-lab-ui {
@@ -16,6 +30,8 @@ circuit-lab {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  font: inherit;
+  color: inherit;
 }
 
 .lab-toolbar {
@@ -35,6 +51,7 @@ circuit-lab {
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  color: inherit;
 }
 
 .toolbar-group {
@@ -183,26 +200,70 @@ circuit-lab {
   background: #fafafa;
 }
 
-/* YAML config scripts inside circuit-lab are data, not UI */
-circuit-lab > script[type="text/yaml"],
-circuit-lab > script[type="application/yaml"],
-circuit-lab > script[type="text/x-yaml"] {
-  display: none;
+.circuit-lab-error {
+  margin: 0;
+  padding: 16px;
+  font: inherit;
+  color: #b91c1c;
 }
 `.trim();
 
 /**
- * Injects circuit-lab styles into document.head once (idempotent).
+ * Document-level CSS for light-DOM children (YAML scripts) that shadow styles cannot reach.
  */
-export function ensureCircuitLabStyles() {
+export const CIRCUIT_LAB_DOCUMENT_CSS = `
+circuit-lab > script[type="text/yaml"],
+circuit-lab > script[type="application/yaml"],
+circuit-lab > script[type="text/x-yaml"],
+circuit-lab > script[type="application/json"],
+circuit-lab > script[type="text/json"] {
+  display: none !important;
+}
+`.trim();
+
+/**
+ * Injects the tiny document-level rules that hide inline lab scripts (idempotent).
+ */
+export function ensureCircuitLabDocumentStyles() {
   if (typeof document === "undefined") {
     return;
   }
-  if (document.getElementById(STYLE_ELEMENT_ID)) {
+  if (document.getElementById(DOCUMENT_STYLE_ID)) {
     return;
   }
   const style = document.createElement("style");
-  style.id = STYLE_ELEMENT_ID;
+  style.id = DOCUMENT_STYLE_ID;
+  style.textContent = CIRCUIT_LAB_DOCUMENT_CSS;
+  document.head.appendChild(style);
+}
+
+/**
+ * Injects circuit-lab UI styles into a shadow root (or document for tests).
+ * @param {ShadowRoot | Document | null | undefined} [root] - Shadow root or document; defaults to document.
+ */
+export function ensureCircuitLabStyles(root) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const target = root || document;
+  if (target instanceof ShadowRoot) {
+    if (target.querySelector("style[" + STYLE_ATTR + "]")) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.setAttribute(STYLE_ATTR, "");
+    style.textContent = CIRCUIT_LAB_CSS;
+    target.appendChild(style);
+    return;
+  }
+
+  if (document.getElementById(DOCUMENT_UI_STYLE_ID)) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = DOCUMENT_UI_STYLE_ID;
+  style.setAttribute(STYLE_ATTR, "");
   style.textContent = CIRCUIT_LAB_CSS;
   document.head.appendChild(style);
 }

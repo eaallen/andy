@@ -1,12 +1,17 @@
 import { loadLabConfigFromElement } from "./lab-config.js";
 import { bootCircuitLab } from "./app.js";
-import { ensureCircuitLabStyles } from "./circuit-lab-styles.js";
+import {
+  ensureCircuitLabDocumentStyles,
+  ensureCircuitLabStyles,
+} from "./circuit-lab-styles.js";
 import { applyCircuitLabSizeAttributes } from "./circuit-lab-size.js";
 
-ensureCircuitLabStyles();
+ensureCircuitLabDocumentStyles();
 
 /**
  * Custom element that loads YAML (file or inline) and boots a Konva circuit lab.
+ *
+ * UI lives in an open Shadow DOM so host-page CSS cannot restyle the toolbar/stage.
  *
  * Usage (preferred — external file):
  *   <circuit-lab src="labs/doorbell.yaml" width="900" height="600"></circuit-lab>
@@ -31,6 +36,17 @@ class CircuitLabElement extends HTMLElement {
   }
 
   /**
+   * Ensures an open shadow root exists and has lab styles injected.
+   */
+  _ensureShadow() {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+    }
+    ensureCircuitLabStyles(this.shadowRoot);
+    return this.shadowRoot;
+  }
+
+  /**
    * Applies width/height from the HTML tag onto the host style.
    * @param {string} name - Changed attribute name.
    * @param {string | null} _oldValue - Previous attribute value.
@@ -51,28 +67,40 @@ class CircuitLabElement extends HTMLElement {
    */
   connectedCallback() {
     applyCircuitLabSizeAttributes(this);
+    this._ensureShadow();
     if (this._booted) {
       return;
     }
     this._booted = true;
-    ensureCircuitLabStyles();
+    ensureCircuitLabDocumentStyles();
     this._boot();
   }
 
   /**
-   * Loads config, renders the UI shell, and boots the Konva app.
+   * Loads config, renders the UI shell into the shadow root, and boots the Konva app.
    */
   async _boot() {
+    const shadow = this._ensureShadow();
+
     let config;
     try {
       config = await loadLabConfigFromElement(this);
     } catch (err) {
-      this.textContent =
+      this.replaceChildren();
+      shadow.replaceChildren();
+      ensureCircuitLabStyles(shadow);
+      const error = document.createElement("p");
+      error.className = "circuit-lab-error";
+      error.textContent =
         "circuit-lab config error: " + (err && err.message ? err.message : err);
+      shadow.appendChild(error);
       return;
     }
 
+    // Clear light-DOM YAML scripts; UI lives only in the shadow tree.
     this.replaceChildren();
+    shadow.replaceChildren();
+    ensureCircuitLabStyles(shadow);
 
     const ui = document.createElement("div");
     ui.className = "circuit-lab-ui";
@@ -105,7 +133,7 @@ class CircuitLabElement extends HTMLElement {
       '<div class="lab-stage" data-lab-stage></div>' +
       "</div>";
 
-    this.appendChild(ui);
+    shadow.appendChild(ui);
     bootCircuitLab(this, config);
   }
 }
