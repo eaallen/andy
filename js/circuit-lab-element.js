@@ -1,11 +1,18 @@
 import { loadLabConfigFromElement } from "./lab-config.js";
 import { bootCircuitLab } from "./app.js";
+import { ensureCircuitLabStyles } from "./circuit-lab-styles.js";
+import { applyCircuitLabSizeAttributes } from "./circuit-lab-size.js";
+
+ensureCircuitLabStyles();
 
 /**
  * Custom element that loads YAML (file or inline) and boots a Konva circuit lab.
  *
  * Usage (preferred — external file):
- *   <circuit-lab src="labs/doorbell.yaml"></circuit-lab>
+ *   <circuit-lab src="labs/doorbell.yaml" width="900" height="600"></circuit-lab>
+ *
+ * width / height accept CSS sizes (`600px`, `100%`, `70vh`) or bare numbers (pixels).
+ * Omit them to fill the parent (default CSS is width/height 100%).
  *
  * Or inline:
  *   <circuit-lab>
@@ -17,13 +24,38 @@ import { bootCircuitLab } from "./app.js";
  */
 class CircuitLabElement extends HTMLElement {
   /**
+   * Attributes that resize the host when changed.
+   */
+  static get observedAttributes() {
+    return ["width", "height"];
+  }
+
+  /**
+   * Applies width/height from the HTML tag onto the host style.
+   * @param {string} name - Changed attribute name.
+   * @param {string | null} _oldValue - Previous attribute value.
+   * @param {string | null} _newValue - New attribute value.
+   */
+  attributeChangedCallback(name, _oldValue, _newValue) {
+    if (name !== "width" && name !== "height") {
+      return;
+    }
+    applyCircuitLabSizeAttributes(this);
+    if (this._booted) {
+      window.dispatchEvent(new Event("resize"));
+    }
+  }
+
+  /**
    * Builds toolbar + stage markup and starts the lab from YAML.
    */
   connectedCallback() {
+    applyCircuitLabSizeAttributes(this);
     if (this._booted) {
       return;
     }
     this._booted = true;
+    ensureCircuitLabStyles();
     this._boot();
   }
 

@@ -1,0 +1,208 @@
+const STYLE_ELEMENT_ID = "circuit-lab-styles";
+
+/**
+ * CSS for the <circuit-lab> custom element UI (toolbar, stage, wire swatches).
+ * Kept as a JS string so library consumers only need the bundled JS file.
+ */
+export const CIRCUIT_LAB_CSS = `
+circuit-lab {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.circuit-lab-ui {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.lab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #d4d4d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.lab-toolbar h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: #e4e4e7;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  padding: 6px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.toolbar-btn:hover {
+  background: #f4f4f5;
+  border-color: #a1a1aa;
+}
+
+.toolbar-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.toolbar-btn.active:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lab-btn-test {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+  font-weight: 600;
+}
+
+.lab-btn-test:hover:not(:disabled) {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+.lab-btn-check {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+  font-weight: 600;
+}
+
+.lab-btn-check:hover:not(:disabled) {
+  background: #6d28d9;
+  border-color: #6d28d9;
+}
+
+.wire-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid #d4d4d8;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+}
+
+.wire-swatch:hover {
+  transform: scale(1.08);
+  border-color: #a1a1aa;
+}
+
+.wire-swatch.active {
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb;
+}
+
+.wire-red {
+  background: #dc2626;
+}
+
+.wire-gray {
+  background: #71717a;
+}
+
+.wire-blue {
+  background: #2563eb;
+}
+
+.wire-green {
+  background: #16a34a;
+}
+
+.lab-hint {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.lab-hint.pass {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.lab-hint.fail {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.lab-stage-wrap {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.lab-stage {
+  width: 100%;
+  height: 100%;
+  background: #fafafa;
+}
+
+/* YAML config scripts inside circuit-lab are data, not UI */
+circuit-lab > script[type="text/yaml"],
+circuit-lab > script[type="application/yaml"],
+circuit-lab > script[type="text/x-yaml"] {
+  display: none;
+}
+`.trim();
+
+/**
+ * Injects circuit-lab styles into document.head once (idempotent).
+ */
+export function ensureCircuitLabStyles() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  if (document.getElementById(STYLE_ELEMENT_ID)) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = STYLE_ELEMENT_ID;
+  style.textContent = CIRCUIT_LAB_CSS;
+  document.head.appendChild(style);
+}
