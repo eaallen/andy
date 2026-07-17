@@ -22,61 +22,12 @@ import yaml from "js-yaml";
  *   four-way, lamp, receptacle, gfci
  */
 
-const LAB_SCRIPT_TYPES = {
-  yaml: ["text/yaml", "application/yaml", "text/x-yaml"],
-  json: ["application/json", "text/json"],
-};
-
 /**
  * Builds an Error with a clear, AI-friendly message for lab config problems.
  * @param {string} message - What went wrong and how to fix it.
  */
 function labConfigError(message) {
   return new Error("Lab config error: " + message);
-}
-
-/**
- * Infers whether a URL path looks like YAML or JSON for clearer parse errors.
- * @param {string} url - Lab file URL or path.
- */
-function inferSourceKindFromUrl(url) {
-  const path = String(url || "").split("?")[0].split("#")[0].toLowerCase();
-  if (path.endsWith(".json")) {
-    return "json";
-  }
-  if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-    return "yaml";
-  }
-  return "unknown";
-}
-
-/**
- * Infers source kind from a script type attribute.
- * @param {string} type - Script type attribute (lowercased).
- */
-function inferSourceKindFromScriptType(type) {
-  if (LAB_SCRIPT_TYPES.json.indexOf(type) !== -1) {
-    return "json";
-  }
-  if (LAB_SCRIPT_TYPES.yaml.indexOf(type) !== -1) {
-    return "yaml";
-  }
-  return null;
-}
-
-/**
- * Finds the first YAML or JSON lab script child inside a host element.
- * @param {HTMLElement} host - Custom element or container that holds the lab definition.
- */
-function findLabScript(host) {
-  const scripts = host.querySelectorAll("script");
-  for (let i = 0; i < scripts.length; i += 1) {
-    const type = (scripts[i].getAttribute("type") || "").toLowerCase();
-    if (inferSourceKindFromScriptType(type)) {
-      return scripts[i];
-    }
-  }
-  return null;
 }
 
 /**
@@ -701,40 +652,24 @@ export function normalizeLabConfig(raw) {
 }
 
 /**
- * Fetches and normalizes lab config from a YAML or JSON URL.
- * @param {string} url - Path to a .yaml / .yml / .json file.
+ * Reads inline YAML/JSON text from a pre.circuit-lab block (prefers a nested code child).
+ * @param {HTMLElement} pre - The pre.circuit-lab element.
  */
-async function loadLabConfigFromUrl(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw labConfigError(
-      "Failed to load lab file from " + url + " (HTTP " + response.status + ")."
-    );
-  }
-  const kind = inferSourceKindFromUrl(url);
-  return normalizeLabConfig(parseLabSource(await response.text(), kind));
+export function readLabSourceFromPre(pre) {
+  const code = pre.querySelector("code");
+  return (code || pre).textContent || "";
 }
 
 /**
- * Loads lab config from a host element's src attribute or inline YAML/JSON script.
- * Prefers src="labs/foo.yaml" (or .json); falls back to a matching <script> child.
- * @param {HTMLElement} host - circuit-lab element.
+ * Loads and normalizes lab config from inline YAML/JSON inside a pre.circuit-lab block.
+ * @param {HTMLElement} pre - The pre.circuit-lab element containing the lab definition.
  */
-export async function loadLabConfigFromElement(host) {
-  const src = host.getAttribute("src");
-  if (src) {
-    return loadLabConfigFromUrl(src);
-  }
-
-  const script = findLabScript(host);
-  if (!script) {
+export function loadLabConfigFromPre(pre) {
+  const source = readLabSourceFromPre(pre);
+  if (!String(source).trim()) {
     throw labConfigError(
-      'circuit-lab needs a src="….yaml|….json" attribute or a ' +
-        '<script type="text/yaml"> / type="application/json"> child.'
+      "pre.circuit-lab needs inline YAML (or JSON) inside a nested <code> element."
     );
   }
-  const kind = inferSourceKindFromScriptType(
-    (script.getAttribute("type") || "").toLowerCase()
-  );
-  return normalizeLabConfig(parseLabSource(script.textContent || "", kind || "unknown"));
+  return normalizeLabConfig(parseLabSource(source, "yaml"));
 }

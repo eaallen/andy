@@ -16,7 +16,7 @@
     </div>
 
     <script type="module">
-      import "./js/circuit-lab-element.js";
+      import { scanAndMountLabs } from "./js/circuit-lab.js";
 
       const LABS = [
         {
@@ -84,9 +84,23 @@
         location.assign(next.toString());
       });
 
-      const host = document.createElement("circuit-lab");
-      host.setAttribute("src", lab.src);
-      document.getElementById("lab-root").appendChild(host);
+      const response = await fetch(lab.src);
+      if (!response.ok) {
+        throw new Error(
+          "Failed to load " + lab.src + " (HTTP " + response.status + ")"
+        );
+      }
+      const yaml = await response.text();
+
+      const root = document.getElementById("lab-root");
+      const pre = document.createElement("pre");
+      pre.className = "circuit-lab";
+      const code = document.createElement("code");
+      code.textContent = yaml;
+      pre.appendChild(code);
+      root.appendChild(pre);
+
+      scanAndMountLabs(root);
     </script>
   </body>
 </html>

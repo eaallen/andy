@@ -87,7 +87,7 @@ Open the URL Vite prints (usually `http://localhost:5173`). Use the Lab picker t
 | --- | --- |
 | `npm run dev` | Start the Vite dev server |
 | `npm run build` | Build a production app bundle into `dist/` |
-| `npm run build:lib` | Build the `<circuit-lab>` IIFE library as `dist/andy.js` |
+| `npm run build:lib` | Build the `pre.circuit-lab` IIFE library as `dist/andy.js` |
 | `npm run publish` | Build the library and copy it to availabooks `tools/api/andy.js` |
 | `npm run preview` | Preview the production build |
 | `npm test` | Run Vitest once |

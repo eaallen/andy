@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   CIRCUIT_LAB_CSS,
-  CIRCUIT_LAB_DOCUMENT_CSS,
-  ensureCircuitLabDocumentStyles,
   ensureCircuitLabStyles,
 } from "../js/circuit-lab-styles.js";
-import "../js/circuit-lab-element.js";
+import { mountCircuitLab, scanAndMountLabs } from "../js/circuit-lab.js";
 
 describe("circuit-lab-styles", () => {
   beforeEach(() => {
@@ -13,20 +11,6 @@ describe("circuit-lab-styles", () => {
     if (existingUi) {
       existingUi.remove();
     }
-    const existingDoc = document.getElementById("circuit-lab-document-styles");
-    if (existingDoc) {
-      existingDoc.remove();
-    }
-  });
-
-  it("injects document-level script-hiding styles once", () => {
-    ensureCircuitLabDocumentStyles();
-    ensureCircuitLabDocumentStyles();
-
-    const styles = document.querySelectorAll("#circuit-lab-document-styles");
-    expect(styles).toHaveLength(1);
-    expect(styles[0].textContent).toBe(CIRCUIT_LAB_DOCUMENT_CSS);
-    expect(styles[0].textContent).toContain('circuit-lab > script[type="text/yaml"]');
   });
 
   it("injects a document style element with the circuit-lab CSS once", () => {
@@ -56,16 +40,16 @@ describe("circuit-lab-styles", () => {
   });
 });
 
-describe("circuit-lab shadow DOM", () => {
+describe("circuit-lab pre mount", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  it("renders toolbar UI inside an open shadow root", async () => {
-    const host = document.createElement("circuit-lab");
-    const script = document.createElement("script");
-    script.type = "application/json";
-    script.textContent = JSON.stringify({
+  it("replaces pre.circuit-lab with a shadow host and toolbar UI", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = JSON.stringify({
       title: "Shadow Lab",
       margin: 40,
       passMessage: "ok",
@@ -73,34 +57,58 @@ describe("circuit-lab shadow DOM", () => {
       components: [{ id: "power", type: "power", x: 40, y: 40 }],
       demo: { wires: [] },
     });
-    host.appendChild(script);
-    document.body.appendChild(host);
+    pre.appendChild(code);
+    document.body.appendChild(pre);
 
-    await viWaitForBoot(host);
+    const host = mountCircuitLab(pre);
 
+    expect(document.querySelector("pre.circuit-lab")).toBeNull();
+    expect(host).toBeTruthy();
+    expect(host.getAttribute("data-circuit-lab-mounted")).toBe("");
     expect(host.shadowRoot).toBeTruthy();
     expect(host.shadowRoot.querySelector("[data-lab-toolbar]")).toBeTruthy();
     expect(host.shadowRoot.querySelector("[data-lab-stage]")).toBeTruthy();
     expect(host.querySelector("[data-lab-toolbar]")).toBeNull();
     expect(host.shadowRoot.querySelector("style[data-circuit-lab-styles]")).toBeTruthy();
   });
-});
 
-/**
- * Waits until the circuit-lab element has finished its async boot.
- * @param {HTMLElement} host - circuit-lab element under test.
- */
-async function viWaitForBoot(host) {
-  for (let i = 0; i < 50; i += 1) {
-    if (host.shadowRoot && host.shadowRoot.querySelector("[data-lab-stage]")) {
-      return;
-    }
-    if (host.shadowRoot && host.shadowRoot.querySelector(".circuit-lab-error")) {
-      throw new Error(host.shadowRoot.querySelector(".circuit-lab-error").textContent);
-    }
-    await new Promise(function (resolve) {
-      setTimeout(resolve, 20);
+  it("shows a config error for empty pre.circuit-lab blocks", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = "   ";
+    pre.appendChild(code);
+    document.body.appendChild(pre);
+
+    const host = mountCircuitLab(pre);
+
+    expect(host.shadowRoot.querySelector(".circuit-lab-error")).toBeTruthy();
+    expect(host.shadowRoot.querySelector(".circuit-lab-error").textContent).toMatch(
+      /inline YAML/i
+    );
+  });
+
+  it("scanAndMountLabs mounts every pre.circuit-lab under a root", () => {
+    const root = document.createElement("div");
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = JSON.stringify({
+      title: "Scanned Lab",
+      margin: 40,
+      passMessage: "ok",
+      hints: { demo: "demo", lab: "lab" },
+      components: [{ id: "power", type: "power", x: 40, y: 40 }],
+      demo: { wires: [] },
     });
-  }
-  throw new Error("circuit-lab did not finish booting in time");
-}
+    pre.appendChild(code);
+    root.appendChild(pre);
+    document.body.appendChild(root);
+
+    const hosts = scanAndMountLabs(root);
+
+    expect(hosts).toHaveLength(1);
+    expect(root.querySelector("pre.circuit-lab")).toBeNull();
+    expect(hosts[0].shadowRoot.querySelector("[data-lab-stage]")).toBeTruthy();
+  });
+});

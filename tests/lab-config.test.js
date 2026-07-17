@@ -3,8 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  loadLabConfigFromPre,
   normalizeLabConfig,
   parseLabSource,
+  readLabSourceFromPre,
 } from "../js/lab-config.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -152,5 +154,46 @@ describe("lab config parsing", () => {
     };
 
     expect(() => normalizeLabConfig(raw)).toThrow(/unknown component/i);
+  });
+});
+
+describe("loadLabConfigFromPre", () => {
+  it("reads YAML from a nested code element", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = [
+      "title: Pre Lab",
+      "components:",
+      "  - { id: power, type: power, x: 0, y: 0 }",
+    ].join("\n");
+    pre.appendChild(code);
+
+    expect(readLabSourceFromPre(pre)).toContain("title: Pre Lab");
+    const config = loadLabConfigFromPre(pre);
+    expect(config.title).toBe("Pre Lab");
+    expect(config.components[0].id).toBe("power");
+  });
+
+  it("falls back to the pre textContent when there is no code child", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    pre.textContent = JSON.stringify({
+      title: "Bare Pre",
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+    });
+
+    const config = loadLabConfigFromPre(pre);
+    expect(config.title).toBe("Bare Pre");
+  });
+
+  it("rejects empty pre.circuit-lab blocks", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = "  \n  ";
+    pre.appendChild(code);
+
+    expect(() => loadLabConfigFromPre(pre)).toThrow(/inline YAML/i);
   });
 });

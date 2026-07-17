@@ -1,9 +1,8 @@
 const STYLE_ATTR = "data-circuit-lab-styles";
-const DOCUMENT_STYLE_ID = "circuit-lab-document-styles";
 const DOCUMENT_UI_STYLE_ID = "circuit-lab-styles";
 
 /**
- * CSS for the <circuit-lab> shadow tree (toolbar, stage, wire swatches).
+ * CSS for the circuit-lab shadow tree (toolbar, stage, wire swatches).
  * Kept as a JS string so library consumers only need the bundled JS file.
  */
 export const CIRCUIT_LAB_CSS = `
@@ -207,35 +206,6 @@ export const CIRCUIT_LAB_CSS = `
   color: #b91c1c;
 }
 `.trim();
-
-/**
- * Document-level CSS for light-DOM children (YAML scripts) that shadow styles cannot reach.
- */
-export const CIRCUIT_LAB_DOCUMENT_CSS = `
-circuit-lab > script[type="text/yaml"],
-circuit-lab > script[type="application/yaml"],
-circuit-lab > script[type="text/x-yaml"],
-circuit-lab > script[type="application/json"],
-circuit-lab > script[type="text/json"] {
-  display: none !important;
-}
-`.trim();
-
-/**
- * Injects the tiny document-level rules that hide inline lab scripts (idempotent).
- */
-export function ensureCircuitLabDocumentStyles() {
-  if (typeof document === "undefined") {
-    return;
-  }
-  if (document.getElementById(DOCUMENT_STYLE_ID)) {
-    return;
-  }
-  const style = document.createElement("style");
-  style.id = DOCUMENT_STYLE_ID;
-  style.textContent = CIRCUIT_LAB_DOCUMENT_CSS;
-  document.head.appendChild(style);
-}
 
 /**
  * Injects circuit-lab UI styles into a shadow root (or document for tests).

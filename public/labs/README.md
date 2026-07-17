@@ -6,9 +6,9 @@ Lab exercises are YAML or JSON files in this folder. JavaScript owns the visual 
 
 ## Loading a lab
 
-- File URL: `<circuit-lab src="labs/doorbell.yaml">` (or `.yml` / `.json`)
-- Inline: a `<script type="text/yaml">` or `type="application/json"` child of `<circuit-lab>`
-- The app shell (`index.html`) lists labs and loads via `?lab=<id>`
+- Inline embed (CDN / host pages): a `<pre class="circuit-lab"><code>…YAML…</code></pre>` block; load `andy.js` (or the module) so it scans and mounts
+- Optional `width` / `height` attributes on the `<pre>` (CSS sizes or bare pixel numbers)
+- The app shell (`index.html`) fetches a lab file, injects it into that markup, then mounts via `?lab=<id>`
 
 Both YAML and JSON go through the same `js-yaml` parser (JSON is a subset of YAML 1.2).
 

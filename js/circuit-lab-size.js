@@ -20,7 +20,7 @@ export function normalizeCssSize(value) {
 /**
  * Applies width/height HTML attributes onto a circuit-lab host's inline style.
  * Missing or empty attributes clear the inline size so CSS defaults apply.
- * @param {HTMLElement} el - The circuit-lab host element.
+ * @param {HTMLElement} el - The circuit-lab host element (or sized pre before mount).
  */
 export function applyCircuitLabSizeAttributes(el) {
   const width = normalizeCssSize(el.getAttribute("width"));

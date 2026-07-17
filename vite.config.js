@@ -23,7 +23,7 @@ export default defineConfig(function (env) {
       test: testConfig,
       build: {
         lib: {
-          entry: path.resolve(rootDir, "js/circuit-lab-element.js"),
+          entry: path.resolve(rootDir, "js/circuit-lab.js"),
           name: "AndyCircuitLab",
           formats: ["iife"],
           fileName: function () {

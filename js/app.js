@@ -17,7 +17,7 @@ import { resolveCoord } from "./lab-config.js";
 /**
  * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
  * @param {HTMLElement} host - circuit-lab host (toolbar/stage live in host.shadowRoot when present).
- * @param {object} config - Normalized lab config from loadLabConfigFromElement.
+ * @param {object} config - Normalized lab config from loadLabConfigFromPre.
  */
 export function bootCircuitLab(host, config) {
   let mode = "demo";
