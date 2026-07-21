@@ -1,12 +1,13 @@
 import type {
   DiagramAiProvider,
+  DiagramGenerateOptions,
   DiagramGenerationRequest,
   DiagramGenerationResult,
 } from "@/ai/types.js";
 
 /**
  * Offline demo provider — returns a realistic single-pole lamp lab so the
- * author UI / video walkthrough works without CURSOR_API_KEY or GEMINI_API_KEY.
+ * author UI / video walkthrough works without GEMINI_API_KEY.
  *
  * Enable with AI_PROVIDER=demo.
  */
@@ -15,9 +16,15 @@ export class DemoDiagramProvider implements DiagramAiProvider {
 
   async generateLabYaml(
     request: DiagramGenerationRequest,
+    options: DiagramGenerateOptions = {},
   ): Promise<DiagramGenerationResult> {
-    // Small delay so the UI "Generating…" state is visible in demos/videos.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const onProgress = options.onProgress;
+    await onProgress?.({ message: "Demo provider: analyzing image…" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await onProgress?.({ message: "Demo provider: drafting YAML…" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await onProgress?.({ message: "Demo provider: validating…" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     const title =
       request.title?.trim() ||

@@ -7,16 +7,16 @@ This is an **npm workspaces monorepo**:
 | Path | Package | Stack |
 | --- | --- | --- |
 | `frontend/` | `@andy/frontend` | Vite, Vitest, Konva circuit lab |
-| `server/` | `@andy/server` | Hono, TypeScript, Cursor SDK / Gemini |
+| `server/` | `@andy/server` | Hono, TypeScript, Gemini / Meta |
 
 ### Setup
 
 ```bash
 npm install
-cp server/.env.example server/.env   # set CURSOR_API_KEY and/or GEMINI_API_KEY
+cp server/.env.example server/.env   # set GEMINI_API_KEY or META_API_KEY
 ```
 
-Requires **Node.js ≥ 22.13** (Cursor SDK).
+Requires **Node.js ≥ 20**.
 
 ### Dev
 
@@ -37,7 +37,7 @@ npm run typecheck
 ### AI diagram → YAML
 
 - Route: `POST /api/diagrams/from-image`
-- Provider selected by `AI_PROVIDER=cursor|gemini` (default `cursor`)
+- Provider selected by `AI_PROVIDER=gemini|meta|demo` (default `gemini`)
 - Lab schema prompt + validation live under `server/src/prompts` and `server/src/lab`
 - Author UI: `frontend/author.html`
 

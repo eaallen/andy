@@ -45,6 +45,9 @@ export default defineConfig(function (env) {
         "/api": {
           target: "http://localhost:3001",
           changeOrigin: true,
+          // Diagram generation can run for minutes; keep the proxy open.
+          timeout: 0,
+          proxyTimeout: 0,
         },
       },
     },

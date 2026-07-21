@@ -14,12 +14,28 @@ export type DiagramGenerationRequest = {
 
 export type DiagramGenerationResult = {
   yaml: string;
-  provider: "cursor" | "gemini" | "demo";
+  provider: "gemini" | "meta" | "demo";
   model: string;
   rawText: string;
 };
 
+/** Live status update while a provider is generating YAML. */
+export type DiagramProgressEvent = {
+  message: string;
+};
+
+export type DiagramProgressHandler = (
+  event: DiagramProgressEvent,
+) => void | Promise<void>;
+
+export type DiagramGenerateOptions = {
+  onProgress?: DiagramProgressHandler;
+};
+
 export interface DiagramAiProvider {
-  readonly name: "cursor" | "gemini" | "demo";
-  generateLabYaml(request: DiagramGenerationRequest): Promise<DiagramGenerationResult>;
+  readonly name: "gemini" | "meta" | "demo";
+  generateLabYaml(
+    request: DiagramGenerationRequest,
+    options?: DiagramGenerateOptions,
+  ): Promise<DiagramGenerationResult>;
 }

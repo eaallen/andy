@@ -6,10 +6,9 @@ Hono + TypeScript API that turns a diagram **image** into Andy **lab YAML**.
 
 | `AI_PROVIDER` | Package | Typical model env |
 | --- | --- | --- |
-| `cursor` (default) | `@cursor/sdk` | `CURSOR_MODEL=grok-4.5` |
-| `gemini` | `@google/genai` | `GEMINI_MODEL=gemini-2.5-flash` |
-
-Cursor SDK is the short-term path (same agent/models as Cursor IDE, including Grok when enabled on the account). Gemini is a lighter multimodal call and a strong long-term default.
+| `gemini` (default) | `@google/genai` | `GEMINI_MODEL=gemini-2.5-flash` |
+| `meta` | `openai` → `api.meta.ai` | `META_MODEL=muse-spark-1.1`, `META_API_KEY` |
+| `demo` | (fixture) | offline YAML for UI walkthroughs |
 
 ## Path aliases
 

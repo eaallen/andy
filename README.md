@@ -49,12 +49,13 @@ The Hono API accepts an image of a wiring diagram and returns Andy lab YAML.
 
 | Provider | Env | Notes |
 | --- | --- | --- |
-| **Cursor SDK** (default) | `CURSOR_API_KEY`, `CURSOR_MODEL` | Short-term path; can use Grok 4.5 / other Cursor models with vision |
-| **Gemini** | `GEMINI_API_KEY`, `GEMINI_MODEL` | Direct multimodal API — good long-term default |
+| **Gemini** (default) | `GEMINI_API_KEY`, `GEMINI_MODEL` | Multimodal diagram → YAML |
+| **Meta** | `META_API_KEY`, `META_MODEL` | OpenAI SDK → `https://api.meta.ai/v1` |
+| **Demo** | `AI_PROVIDER=demo` | Offline fixture YAML (no API key) |
 
 ```bash
 # from repo root
-cp server/.env.example server/.env   # add CURSOR_API_KEY or GEMINI_API_KEY
+cp server/.env.example server/.env   # add GEMINI_API_KEY or META_API_KEY
 npm install
 npm run dev:server                   # http://localhost:3001
 npm run dev:frontend                 # http://localhost:5173 (proxies /api → :3001)
@@ -76,8 +77,8 @@ Response:
   "yaml": "title: ...",
   "lab": { "title": "...", "components": [] },
   "warnings": [],
-  "provider": "cursor",
-  "model": "grok-4.5"
+  "provider": "gemini",
+  "model": "gemini-2.5-flash"
 }
 ```
 
@@ -97,7 +98,7 @@ Response:
 ## Tech stack
 
 - **Frontend** — HTML / CSS / JS, Vite, Vitest, Konva, js-yaml
-- **Server** — Node 22+, Hono, TypeScript, `@/` path aliases, Cursor SDK + Gemini
+- **Server** — Node 20+, Hono, TypeScript, `@/` path aliases, Gemini
 - **Web Audio API** — sound profiles from lab config (no sound files)
 
 ## Getting started
@@ -123,7 +124,7 @@ npm run dev:server      # AI YAML API (needs API key in server/.env)
 
 **Utah exam starter catalog** — Demo/Lab/Check/Test driven by YAML under `frontend/public/labs/`.
 
-**AI authoring MVP** — image → YAML via Cursor SDK or Gemini, with schema validation and a simple author UI.
+**AI authoring MVP** — image → YAML via Gemini, with schema validation and a simple author UI.
 
 Next steps toward a fuller remote lab:
 

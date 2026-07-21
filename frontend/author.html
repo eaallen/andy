@@ -119,6 +119,14 @@
         font-size: 0.85rem;
         color: #6b7280;
       }
+      .lab-mount {
+        width: 100%;
+        height: 520px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fafafa;
+      }
     </style>
   </head>
   <body>
@@ -131,8 +139,7 @@
       <section class="panel">
         <p>
           Upload a photo or screenshot of a wiring diagram. The Andy server uses
-          AI (Cursor SDK / Grok, or Gemini) to draft an Andy lab YAML you can
-          open in the circuit lab.
+          Gemini or Meta to draft an Andy lab YAML you can open in the circuit lab.
         </p>
         <form id="form">
           <div class="row">
@@ -172,62 +179,249 @@
           <pre class="yaml" id="yaml"></pre>
         </div>
       </section>
+
+      <section class="panel" id="demoPreview" hidden>
+        <h2>Demo preview</h2>
+        <div class="lab-mount" id="labMount"></div>
+      </section>
     </main>
 
     <script type="module">
+      import { mountCircuitLab } from "./js/circuit-lab.js";
+
       const form = document.getElementById("form");
       const statusEl = document.getElementById("status");
       const submitBtn = document.getElementById("submit");
       const copyBtn = document.getElementById("copy");
       const openBtn = document.getElementById("openLab");
       const resultEl = document.getElementById("result");
+      const demoPreviewEl = document.getElementById("demoPreview");
+      const labMountEl = document.getElementById("labMount");
       const yamlEl = document.getElementById("yaml");
       const warningsEl = document.getElementById("warnings");
       const metaEl = document.getElementById("meta");
       const thumbEl = document.getElementById("thumb");
 
       let lastYaml = "";
+      let thumbObjectUrl = "";
+      let statusBase = "";
+      let statusStartedAt = 0;
+      let statusTimer = null;
+      const imageInput = document.getElementById("image");
+
+      /**
+       * Mounts an interactive Demo circuit from generated YAML into the preview panel.
+       * @param {string} yaml - Andy lab YAML source.
+       */
+      function renderDemoPreview(yaml) {
+        labMountEl.replaceChildren();
+        if (!yaml.trim()) {
+          demoPreviewEl.hidden = true;
+          return;
+        }
+
+        const pre = document.createElement("pre");
+        pre.className = "circuit-lab";
+        pre.setAttribute("height", "100%");
+        const code = document.createElement("code");
+        code.textContent = yaml;
+        pre.appendChild(code);
+        labMountEl.appendChild(pre);
+        demoPreviewEl.hidden = false;
+        mountCircuitLab(pre);
+      }
+
+      /**
+       * Clears generated YAML, warnings, and demo preview after a new image is chosen.
+       */
+      function resetGeneratedResult() {
+        lastYaml = "";
+        yamlEl.textContent = "";
+        metaEl.textContent = "";
+        warningsEl.replaceChildren();
+        renderDemoPreview("");
+        copyBtn.disabled = true;
+        openBtn.disabled = true;
+      }
+
+      /**
+       * Shows a local preview of the selected diagram image and resets prior YAML.
+       * @param {File | null | undefined} file - Selected image file from the input.
+       */
+      function previewSelectedImage(file) {
+        if (thumbObjectUrl) {
+          URL.revokeObjectURL(thumbObjectUrl);
+          thumbObjectUrl = "";
+        }
+        resetGeneratedResult();
+        if (!(file instanceof File) || !file.type.startsWith("image/")) {
+          thumbEl.removeAttribute("src");
+          resultEl.hidden = true;
+          return;
+        }
+        thumbObjectUrl = URL.createObjectURL(file);
+        thumbEl.src = thumbObjectUrl;
+        resultEl.hidden = false;
+        finishStatus("");
+      }
+
+      /**
+       * Updates the status line and starts/refreshes the elapsed-seconds timer.
+       * @param {string} message - Status text without elapsed suffix.
+       */
+      function setStatus(message) {
+        statusBase = message;
+        if (!statusTimer) {
+          statusStartedAt = Date.now();
+          statusTimer = setInterval(() => {
+            const secs = Math.max(
+              0,
+              Math.round((Date.now() - statusStartedAt) / 1000),
+            );
+            statusEl.textContent = statusBase
+              ? `${statusBase} (${secs}s)`
+              : "";
+          }, 1000);
+        }
+        const secs = Math.max(
+          0,
+          Math.round((Date.now() - statusStartedAt) / 1000),
+        );
+        statusEl.textContent = `${message} (${secs}s)`;
+      }
+
+      /**
+       * Stops the elapsed timer and sets a final status (no seconds suffix).
+       * @param {string} message - Final status text.
+       * @param {boolean} [isError] - When true, styles as error.
+       */
+      function finishStatus(message, isError) {
+        if (statusTimer) {
+          clearInterval(statusTimer);
+          statusTimer = null;
+        }
+        statusBase = "";
+        statusEl.classList.toggle("error", Boolean(isError));
+        statusEl.textContent = message;
+      }
+
+      /**
+       * Reads an SSE response body and invokes handlers for named events.
+       * @param {Response} response - Fetch response with text/event-stream body.
+       * @param {{ onProgress?: (data: { message?: string }) => void, onResult?: (data: Record<string, unknown>) => void, onError?: (data: { error?: string }) => void }} handlers
+       */
+      async function consumeSse(response, handlers) {
+        if (!response.body) {
+          throw new Error("No response body from server.");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            if (!chunk.trim() || chunk.startsWith(":")) continue;
+            let eventName = "message";
+            const dataLines = [];
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("event:")) {
+                eventName = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5).trim());
+              }
+            }
+            if (!dataLines.length) continue;
+            let data;
+            try {
+              data = JSON.parse(dataLines.join("\n"));
+            } catch {
+              continue;
+            }
+            if (eventName === "progress") handlers.onProgress?.(data);
+            else if (eventName === "result") handlers.onResult?.(data);
+            else if (eventName === "error") handlers.onError?.(data);
+          }
+        }
+      }
+
+      imageInput.addEventListener("change", () => {
+        const file = imageInput.files?.[0];
+        previewSelectedImage(file);
+      });
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         statusEl.classList.remove("error");
-        statusEl.textContent = "Generating… this can take a bit.";
+        setStatus("Uploading image…");
         submitBtn.disabled = true;
         copyBtn.disabled = true;
         openBtn.disabled = true;
 
         const fd = new FormData(form);
-        const file = fd.get("image");
-        if (file instanceof File) {
-          thumbEl.src = URL.createObjectURL(file);
-        }
 
         try {
-          const res = await fetch("/api/diagrams/from-image", {
+          const res = await fetch("/api/diagrams/from-image?stream=1", {
             method: "POST",
+            headers: { Accept: "text/event-stream" },
             body: fd,
           });
-          const data = await res.json();
+
           if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
             throw new Error(data.error || res.statusText);
           }
 
-          lastYaml = data.yaml || "";
+          /** @type {Record<string, unknown> | null} */
+          let result = null;
+          /** @type {string | null} */
+          let streamError = null;
+
+          await consumeSse(res, {
+            onProgress: (data) => {
+              if (data?.message) setStatus(String(data.message));
+            },
+            onResult: (data) => {
+              result = data;
+            },
+            onError: (data) => {
+              streamError = data?.error
+                ? String(data.error)
+                : "Generation failed.";
+            },
+          });
+
+          if (streamError) {
+            throw new Error(streamError);
+          }
+          if (!result) {
+            throw new Error("Server closed the stream without a result.");
+          }
+
+          lastYaml = String(result.yaml || "");
           yamlEl.textContent = lastYaml;
-          metaEl.textContent = `provider: ${data.provider} · model: ${data.model}`;
+          metaEl.textContent = `provider: ${result.provider} · model: ${result.model}`;
           warningsEl.innerHTML = "";
-          for (const warning of data.warnings || []) {
+          for (const warning of result.warnings || []) {
             const li = document.createElement("li");
-            li.textContent = warning;
+            li.textContent = String(warning);
             warningsEl.appendChild(li);
           }
           resultEl.hidden = false;
+          renderDemoPreview(lastYaml);
           copyBtn.disabled = !lastYaml;
           openBtn.disabled = !lastYaml;
-          statusEl.textContent = "Done.";
+          finishStatus("Done.");
         } catch (err) {
-          statusEl.classList.add("error");
-          statusEl.textContent = err instanceof Error ? err.message : String(err);
+          finishStatus(
+            err instanceof Error ? err.message : String(err),
+            true,
+          );
         } finally {
           submitBtn.disabled = false;
         }
@@ -235,7 +429,7 @@
 
       copyBtn.addEventListener("click", async () => {
         await navigator.clipboard.writeText(lastYaml);
-        statusEl.textContent = "YAML copied.";
+        finishStatus("YAML copied.");
       });
 
       openBtn.addEventListener("click", () => {

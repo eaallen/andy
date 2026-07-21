@@ -3,6 +3,7 @@ import { env } from "@/config/env.js";
 import { buildLabYamlPrompt } from "@/prompts/lab-yaml.js";
 import type {
   DiagramAiProvider,
+  DiagramGenerateOptions,
   DiagramGenerationRequest,
   DiagramGenerationResult,
 } from "@/ai/types.js";
@@ -16,6 +17,7 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
 
   async generateLabYaml(
     request: DiagramGenerationRequest,
+    options: DiagramGenerateOptions = {},
   ): Promise<DiagramGenerationResult> {
     if (!env.geminiApiKey) {
       throw Object.assign(new Error("GEMINI_API_KEY is not configured."), {
@@ -24,12 +26,16 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
       });
     }
 
+    const onProgress = options.onProgress;
+    await onProgress?.({ message: "Sending diagram to Gemini…" });
+
     const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
     const prompt = buildLabYamlPrompt({
       title: request.title,
       notes: request.notes,
     });
 
+    await onProgress?.({ message: "Waiting for Gemini response…" });
     const response = await ai.models.generateContent({
       model: env.geminiModel,
       contents: [
@@ -56,6 +62,7 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
       });
     }
 
+    await onProgress?.({ message: "Validating generated YAML…" });
     return {
       yaml: rawText,
       provider: "gemini",

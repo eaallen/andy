@@ -9,19 +9,19 @@ function optional(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
 }
 
-export type AiProviderName = "cursor" | "gemini" | "demo";
+export type AiProviderName = "gemini" | "meta" | "demo";
 
 function parseProvider(raw: string): AiProviderName {
   const value = raw.trim().toLowerCase();
-  if (value === "cursor" || value === "gemini" || value === "demo") {
+  if (value === "gemini" || value === "meta" || value === "demo") {
     return value;
   }
   throw new Error(
-    `Invalid AI_PROVIDER "${raw}". Expected "cursor", "gemini", or "demo".`,
+    `Invalid AI_PROVIDER "${raw}". Expected "gemini", "meta", or "demo".`,
   );
 }
 
-const aiProvider = parseProvider(optional("AI_PROVIDER", "cursor"));
+const aiProvider = parseProvider(optional("AI_PROVIDER", "gemini"));
 
 export const env = {
   port: Number(optional("PORT", "3001")) || 3001,
@@ -30,29 +30,31 @@ export const env = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  cursorApiKey: optional("CURSOR_API_KEY"),
-  /** Cursor model id, e.g. grok-4.5 / composer-2.5 / auto. Discover with Cursor.models.list(). */
-  cursorModel: optional("CURSOR_MODEL", "grok-4.5"),
   geminiApiKey: optional("GEMINI_API_KEY"),
   geminiModel: optional("GEMINI_MODEL", "gemini-2.5-flash"),
-  maxUploadBytes: Number(optional("MAX_UPLOAD_BYTES", String(8 * 1024 * 1024))),
+  /** Meta / OpenAI-compatible Responses API key. */
+  metaApiKey: optional("META_API_KEY"),
+  metaModel: optional("META_MODEL", "muse-spark-1.1"),
+  metaBaseUrl: optional("META_BASE_URL", "https://api.meta.ai/v1"),
+  /** Default 20 MiB — large phone photos / diagram scans; override with MAX_UPLOAD_BYTES. */
+  maxUploadBytes: Number(optional("MAX_UPLOAD_BYTES", String(20 * 1024 * 1024))),
 };
 
 export function assertProviderConfigured(): void {
-  if (env.aiProvider === "cursor" && !env.cursorApiKey) {
-    throw Object.assign(
-      new Error(
-        "CURSOR_API_KEY is required when AI_PROVIDER=cursor. Create a key at Cursor Dashboard → API Keys.",
-      ),
-      { status: 503, code: "missing_cursor_api_key" },
-    );
-  }
   if (env.aiProvider === "gemini" && !env.geminiApiKey) {
     throw Object.assign(
       new Error(
         "GEMINI_API_KEY is required when AI_PROVIDER=gemini. Get a key from Google AI Studio.",
       ),
       { status: 503, code: "missing_gemini_api_key" },
+    );
+  }
+  if (env.aiProvider === "meta" && !env.metaApiKey) {
+    throw Object.assign(
+      new Error(
+        "META_API_KEY is required when AI_PROVIDER=meta.",
+      ),
+      { status: 503, code: "missing_meta_api_key" },
     );
   }
 }
