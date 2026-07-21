@@ -9,15 +9,15 @@ function optional(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
 }
 
-export type AiProviderName = "cursor" | "gemini";
+export type AiProviderName = "cursor" | "gemini" | "demo";
 
 function parseProvider(raw: string): AiProviderName {
   const value = raw.trim().toLowerCase();
-  if (value === "cursor" || value === "gemini") {
+  if (value === "cursor" || value === "gemini" || value === "demo") {
     return value;
   }
   throw new Error(
-    `Invalid AI_PROVIDER "${raw}". Expected "cursor" or "gemini".`,
+    `Invalid AI_PROVIDER "${raw}". Expected "cursor", "gemini", or "demo".`,
   );
 }
 

@@ -14,12 +14,12 @@ export type DiagramGenerationRequest = {
 
 export type DiagramGenerationResult = {
   yaml: string;
-  provider: "cursor" | "gemini";
+  provider: "cursor" | "gemini" | "demo";
   model: string;
   rawText: string;
 };
 
 export interface DiagramAiProvider {
-  readonly name: "cursor" | "gemini";
+  readonly name: "cursor" | "gemini" | "demo";
   generateLabYaml(request: DiagramGenerationRequest): Promise<DiagramGenerationResult>;
 }
