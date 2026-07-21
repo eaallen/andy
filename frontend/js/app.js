@@ -1,13 +1,10 @@
 import Konva from "konva";
-import {
-  COMPONENT_TYPES,
-  createLayoutFromConfig,
-  findTerminal,
-  WIRE_COLORS,
-  applyDoorbellButtonVisual,
-  applyLampVisual,
-  applySwitchVisual,
-} from "./components.js";
+import { applyDoorbellButtonVisual } from "./components/button.js";
+import { COMPONENT_TYPES, WIRE_COLORS } from "./components/constants.js";
+import { applyLampVisual } from "./components/lamp.js";
+import { createLayoutFromConfig } from "./components/registry.js";
+import { findTerminal } from "./components/shared.js";
+import { applySwitchVisual } from "./components/switch-shared.js";
 import { createWireManager } from "./wires.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";

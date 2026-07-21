@@ -2,7 +2,7 @@
 
 Lab exercises are YAML or JSON files in this folder. JavaScript owns the visual component factories (`power`, `button`, `lamp`, …). Lab files own placement, demo wiring, simulation topology, and grading rules.
 
-**New device kinds** still need a factory in `js/components.js`. **New exercises** that only use existing kinds need only a lab file.
+**New device kinds** still need a factory under `js/components/` (registered in `registry.js`). **New exercises** that only use existing kinds need only a lab file.
 
 ## Loading a lab
 
@@ -123,7 +123,7 @@ grading:
 
 ## Built-in component catalog
 
-Factories live in `js/components.js` (`COMPONENT_REGISTRY`). Use these `type` strings in lab files.
+Factories live under `js/components/` (`COMPONENT_REGISTRY` in `registry.js`). Use these `type` strings in lab files.
 
 ### `power`
 

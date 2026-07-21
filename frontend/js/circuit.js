@@ -1,9 +1,5 @@
-import {
-  TERMINAL_ROLES,
-  COMPONENT_TYPES,
-  getTerminalComponentGroup,
-  findTerminal,
-} from "./components.js";
+import { COMPONENT_TYPES, TERMINAL_ROLES } from "./components/constants.js";
+import { findTerminal, getTerminalComponentGroup } from "./components/shared.js";
 
 /**
  * Builds continuity simulation helpers from a normalized lab simulation config.

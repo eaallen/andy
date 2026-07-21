@@ -20,7 +20,7 @@ Add or update Vitest tests in `tests/**/*.test.js` when changing:
 
 Do **not** block on full canvas/UI coverage for:
 
-- Konva drawing / layout polish (`components.js` visuals, wire rendering)
+- Konva drawing / layout polish (`components/` visuals, wire rendering)
 - Web Audio / sound playback (`sounds.js`)
 - One-off app shell wiring that is not part of the library contract
 

@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  COMPONENT_TYPES,
-  COMPONENT_REGISTRY,
-  TERMINAL_ROLES,
-  makeComponentFromEntry,
-} from "../js/components.js";
+import { COMPONENT_TYPES, TERMINAL_ROLES } from "../js/components/constants.js";
+import { COMPONENT_REGISTRY, makeComponentFromEntry } from "../js/components/registry.js";
 
 describe("COMPONENT_REGISTRY", () => {
   it("registers all built-in component types including multi-throw and GFCI", () => {

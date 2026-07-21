@@ -17,7 +17,7 @@ import yaml from "js-yaml";
  *     continuity[]: { from, to, fail? }
  *     whenClosed[]: { switch?, closed?: [ids], energize: [loadId, ...] }
  *
- * Built-in component types (factories live in components.js):
+ * Built-in component types (factories live under components/):
  *   power, transformer, chime, terminal-block, button, switch, three-way,
  *   four-way, lamp, receptacle, gfci
  */

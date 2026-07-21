@@ -41,4 +41,4 @@ npm run typecheck
 - Lab schema prompt + validation live under `server/src/prompts` and `server/src/lab`
 - Author UI: `frontend/author.html`
 
-Do **not** invent new component types in generated YAML without adding a factory in `frontend/js/components.js`. See `frontend/public/labs/README.md`.
+Do **not** invent new component types in generated YAML without adding a factory under `frontend/js/components/` (and registering it in `registry.js`). See `frontend/public/labs/README.md`.

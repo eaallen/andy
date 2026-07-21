@@ -1,5 +1,6 @@
 import Konva from "konva";
-import { WIRE_COLORS, getTerminalPosition, getTerminalComponentGroup } from "./components.js";
+import { WIRE_COLORS } from "./components/constants.js";
+import { getTerminalComponentGroup, getTerminalPosition } from "./components/shared.js";
 
 /** Dash patterns for same-color wires (first is solid). */
 const WIRE_DASH_PATTERNS = [

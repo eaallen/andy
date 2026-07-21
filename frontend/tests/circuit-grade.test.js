@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createCircuitSimulator } from "../js/circuit.js";
 import { createGrader } from "../js/grade.js";
-import { TERMINAL_ROLES } from "../js/components.js";
+import { TERMINAL_ROLES } from "../js/components/constants.js";
 import {
   normalizeLabConfig,
   parseLabSource,

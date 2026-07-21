@@ -1,6 +1,6 @@
 /**
  * Component catalog + authoring rules embedded in the AI prompt.
- * Keep in sync with frontend/public/labs/README.md and js/components.js.
+ * Keep in sync with frontend/public/labs/README.md and js/components/.
  */
 
 export const COMPONENT_CATALOG = `
