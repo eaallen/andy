@@ -3,184 +3,561 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Andy — Create lab from diagram image</title>
+    <title>Andre — Create lab from diagram image</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      html,
+      :root {
+        --ink: #15202b;
+        --muted: #5b6b7c;
+        --line: #c9d4df;
+        --surface: #ffffffcc;
+        --accent: #0f766e;
+        --accent-ink: #fff;
+        --danger: #b42318;
+        --warn: #9a6700;
+        --code-bg: #101820;
+        --code-fg: #e8eef4;
+        --page: #e8eef2;
+      }
+
+      html {
+        height: auto;
+        min-height: 100%;
+        background: var(--page);
+      }
+
       body {
+        position: relative;
         overflow: auto;
         height: auto;
-        background: #f4f4f5;
+        min-height: 100dvh;
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        color: var(--ink);
+        background: transparent;
       }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse 70vw 40vh at 8% 0%, #d7e8e4 0%, transparent 70%),
+          radial-gradient(ellipse 60vw 36vh at 100% 0%, #d4e0ec 0%, transparent 70%),
+          linear-gradient(180deg, #eef3f6 0%, var(--page) 45%, var(--page) 100%);
+      }
+
       .author {
-        max-width: 960px;
+        --pad: clamp(1rem, 3vw, 1.75rem);
+        max-width: 920px;
         margin: 0 auto;
-        padding: 1.25rem;
+        padding: var(--pad) var(--pad) 3rem;
         display: grid;
-        gap: 1rem;
+        gap: 1.5rem;
       }
-      .author header {
+
+      .author-top {
         display: flex;
         flex-wrap: wrap;
         align-items: baseline;
-        gap: 0.75rem 1.25rem;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
       }
-      .author header a {
-        color: #2563eb;
-      }
-      .panel {
-        border: 1px solid #d1d5db;
-        border-radius: 10px;
-        padding: 1rem;
-        background: #fff;
-      }
-      .row {
+
+      .brand {
         display: grid;
-        gap: 0.5rem;
-        margin-bottom: 0.75rem;
+        gap: 0.2rem;
       }
-      label {
+
+      .brand-mark {
+        font-size: 0.75rem;
         font-weight: 600;
-        font-size: 0.9rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
       }
-      input[type="text"],
-      textarea,
-      input[type="file"] {
+
+      .brand h1 {
+        margin: 0;
+        font-size: clamp(1.5rem, 3vw, 1.85rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .brand p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        max-width: 38rem;
+        line-height: 1.45;
+      }
+
+      .back {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.92rem;
+      }
+
+      .back:hover {
+        color: var(--ink);
+        text-decoration: underline;
+      }
+
+      .drop {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 180px;
+        padding: 1.25rem;
+        border: 1.5px dashed var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        backdrop-filter: blur(6px);
+        cursor: pointer;
+        transition:
+          border-color 160ms ease,
+          background 160ms ease,
+          transform 160ms ease;
+      }
+
+      .drop:hover,
+      .drop:focus-within,
+      .drop.is-drag {
+        border-color: var(--accent);
+        background: #ffffffee;
+      }
+
+      .drop.is-drag {
+        transform: scale(1.01);
+      }
+
+      .drop.has-file {
+        min-height: 0;
+        padding: 0.75rem;
+        border-style: solid;
+        cursor: default;
+      }
+
+      .drop input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .drop.has-file input[type="file"] {
+        inset: auto;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: 7.5rem;
+        height: 2rem;
+        opacity: 0;
+      }
+
+      .drop-empty {
+        text-align: center;
+        pointer-events: none;
+      }
+
+      .drop-empty strong {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+
+      .drop-empty span {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .drop.has-file .drop-empty {
+        display: none;
+      }
+
+      .drop-preview {
+        display: none;
         width: 100%;
-        box-sizing: border-box;
+        gap: 0.75rem;
+        align-items: start;
       }
+
+      .drop.has-file .drop-preview {
+        display: grid;
+        grid-template-columns: minmax(140px, 220px) 1fr;
+      }
+
+      @media (max-width: 640px) {
+        .drop.has-file .drop-preview {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .drop-preview img {
+        width: 100%;
+        max-height: 220px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #f3f6f8;
+      }
+
+      .drop-meta {
+        display: grid;
+        gap: 0.35rem;
+        align-content: start;
+        padding-top: 0.15rem;
+      }
+
+      .drop-meta strong {
+        font-weight: 600;
+        word-break: break-all;
+      }
+
+      .drop-meta span,
+      .change-file {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .change-file {
+        justify-self: start;
+        margin-top: 0.35rem;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        border-radius: 6px;
+        padding: 0.35rem 0.65rem;
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+        pointer-events: none;
+      }
+
+      .hints {
+        margin: 0;
+        padding: 0.9rem 1rem;
+        border: 1.5px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        backdrop-filter: blur(6px);
+        transition: border-color 160ms ease, background 160ms ease;
+      }
+
+      .hints:hover,
+      .hints:focus-within {
+        border-color: var(--accent);
+        background: #ffffffee;
+      }
+
+      .hints summary {
+        cursor: pointer;
+        color: var(--ink);
+        font-size: 0.98rem;
+        font-weight: 600;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 0.65rem;
+      }
+
+      .hints summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .hints summary::before {
+        content: "+";
+        display: inline-grid;
+        place-items: center;
+        width: 1.35rem;
+        height: 1.35rem;
+        flex-shrink: 0;
+        border-radius: 6px;
+        background: #d7e8e4;
+        color: var(--accent);
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .hints[open] summary::before {
+        content: "–";
+      }
+
+      .hints summary .hint-note {
+        flex-basis: 100%;
+        margin: 0.15rem 0 0;
+        padding-left: 2rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 400;
+        line-height: 1.4;
+      }
+
+      .hints-fields {
+        display: grid;
+        gap: 0.85rem;
+        margin-top: 0.9rem;
+        padding-top: 0.9rem;
+        border-top: 1px solid var(--line);
+      }
+
+      label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      input[type="text"],
       textarea {
-        min-height: 6rem;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.6rem 0.75rem;
+        background: #fff;
+        color: var(--ink);
         font: inherit;
       }
+
+      input[type="text"]:focus,
+      textarea:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+        outline-offset: 1px;
+        border-color: var(--accent);
+      }
+
+      textarea {
+        min-height: 4.5rem;
+        resize: vertical;
+      }
+
+      #form {
+        display: grid;
+        gap: 1.5rem;
+      }
+
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
         align-items: center;
+        gap: 0.65rem 0.85rem;
       }
+
       button {
-        cursor: pointer;
-        border: 1px solid #111827;
-        background: #111827;
-        color: #fff;
-        border-radius: 8px;
-        padding: 0.55rem 0.9rem;
         font: inherit;
+        font-weight: 500;
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+        border: 1px solid transparent;
       }
-      button.secondary {
+
+      button.primary {
+        background: var(--accent);
+        color: var(--accent-ink);
+      }
+
+      button.primary:hover:not(:disabled) {
+        filter: brightness(1.05);
+      }
+
+      button.ghost {
+        background: transparent;
+        border-color: var(--line);
+        color: var(--ink);
+      }
+
+      button.ghost:hover:not(:disabled) {
         background: #fff;
-        color: #111827;
       }
+
       button:disabled {
-        opacity: 0.55;
+        opacity: 0.45;
         cursor: not-allowed;
       }
+
       .status {
         font-size: 0.9rem;
-        color: #374151;
+        color: var(--muted);
       }
+
       .status.error {
-        color: #b91c1c;
+        color: var(--danger);
       }
-      .preview {
+
+      .result {
+        display: none;
+        gap: 0.75rem;
+      }
+
+      .result.is-visible {
         display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
       }
-      @media (min-width: 800px) {
-        .preview {
-          grid-template-columns: 280px 1fr;
-        }
+
+      .result-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
       }
-      .preview img {
-        max-width: 100%;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        background: #f9fafb;
+
+      .result-head h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
       }
+
+      .result-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
       pre.yaml {
         margin: 0;
-        padding: 0.75rem;
+        padding: 0.9rem 1rem;
         overflow: auto;
         max-height: 420px;
-        background: #0b1020;
-        color: #e5e7eb;
-        border-radius: 8px;
-        font-size: 0.82rem;
-        line-height: 1.4;
+        min-height: 8rem;
+        background: var(--code-bg);
+        color: var(--code-fg);
+        border-radius: 10px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.8rem;
+        line-height: 1.45;
       }
-      ul.warnings {
-        margin: 0.5rem 0 0;
-        padding-left: 1.2rem;
-        color: #92400e;
+
+      pre.yaml:empty::before {
+        content: "YAML will appear here after generation.";
+        color: #8b9aab;
       }
+
       .meta {
+        margin: 0;
         font-size: 0.85rem;
-        color: #6b7280;
+        color: var(--muted);
       }
+
+      ul.warnings {
+        margin: 0;
+        padding-left: 1.1rem;
+        color: var(--warn);
+        font-size: 0.9rem;
+      }
+
+      .demo {
+        display: none;
+        gap: 0.65rem;
+      }
+
+      .demo.is-visible {
+        display: grid;
+      }
+
+      .demo h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
       .lab-mount {
         width: 100%;
         height: 520px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
         overflow: hidden;
-        background: #fafafa;
+        background: #fafbfc;
       }
     </style>
   </head>
   <body>
     <main class="author">
-      <header>
-        <h1>Create lab from image</h1>
-        <a href="/">← Back to labs</a>
+      <header class="author-top">
+        <div class="brand">
+          <div class="brand-mark">Andre</div>
+          <h1>Create lab from image</h1>
+          <p>
+            Drop a wiring diagram. Andre drafts lab YAML you can open in the
+            circuit lab.
+          </p>
+        </div>
+        <a class="back" href="/">← Labs</a>
       </header>
 
-      <section class="panel">
-        <p>
-          Upload a photo or screenshot of a wiring diagram. The Andy server uses
-          Gemini or Meta to draft an Andy lab YAML you can open in the circuit lab.
-        </p>
-        <form id="form">
-          <div class="row">
-            <label for="image">Diagram image</label>
-            <input id="image" name="image" type="file" accept="image/*" required />
+      <form id="form">
+        <label class="drop" id="drop" for="image">
+          <input id="image" name="image" type="file" accept="image/*" required />
+          <div class="drop-empty">
+            <strong>Drop a diagram image</strong>
+            <span>or click to browse · PNG, JPG, WebP</span>
           </div>
-          <div class="row">
-            <label for="title">Title hint (optional)</label>
-            <input id="title" name="title" type="text" placeholder="e.g. Three-way hallway lights" />
+          <div class="drop-preview">
+            <img id="thumb" alt="Uploaded diagram preview" />
+            <div class="drop-meta">
+              <strong id="fileName"></strong>
+              <span id="fileInfo"></span>
+              <span class="change-file">Change image</span>
+            </div>
           </div>
-          <div class="row">
-            <label for="notes">Instructor notes (optional)</label>
-            <textarea
-              id="notes"
-              name="notes"
-              placeholder="Anything the model should know — shared neutrals, Front owns its own chime, etc."
-            ></textarea>
-          </div>
-          <div class="actions">
-            <button type="submit" id="submit">Generate YAML</button>
-            <button type="button" class="secondary" id="copy" disabled>Copy YAML</button>
-            <button type="button" class="secondary" id="openLab" disabled>Open in lab</button>
-            <span class="status" id="status"></span>
-          </div>
-        </form>
-      </section>
+        </label>
 
-      <section class="panel preview" id="result" hidden>
-        <div>
-          <h2>Source image</h2>
-          <img id="thumb" alt="Uploaded diagram preview" />
-          <p class="meta" id="meta"></p>
-          <ul class="warnings" id="warnings"></ul>
+        <details class="hints">
+          <summary>
+            Optional hints for the model
+            <span class="hint-note"
+              >Title and instructor notes help the model match your diagram.</span
+            >
+          </summary>
+          <div class="hints-fields">
+            <label>
+              Title hint
+              <input
+                id="title"
+                name="title"
+                type="text"
+                placeholder="e.g. Three-way hallway lights"
+              />
+            </label>
+            <label>
+              Instructor notes
+              <textarea
+                id="notes"
+                name="notes"
+                placeholder="Shared neutrals, Front owns its own chime, etc."
+              ></textarea>
+            </label>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button type="submit" class="primary" id="submit">Generate YAML</button>
+          <span class="status" id="status"></span>
         </div>
-        <div>
+      </form>
+
+      <section class="result" id="result" aria-live="polite">
+        <div class="result-head">
           <h2>Generated YAML</h2>
-          <pre class="yaml" id="yaml"></pre>
+          <div class="result-actions">
+            <button type="button" class="ghost" id="copy" disabled>Copy</button>
+            <button type="button" class="ghost" id="openLab" disabled>Open in lab</button>
+          </div>
         </div>
+        <p class="meta" id="meta"></p>
+        <ul class="warnings" id="warnings"></ul>
+        <pre class="yaml" id="yaml"></pre>
       </section>
 
-      <section class="panel" id="demoPreview" hidden>
+      <section class="demo" id="demoPreview">
         <h2>Demo preview</h2>
         <div class="lab-mount" id="labMount"></div>
       </section>
@@ -190,6 +567,8 @@
       import { mountCircuitLab } from "./js/circuit-lab.js";
 
       const form = document.getElementById("form");
+      const dropEl = document.getElementById("drop");
+      const imageInput = document.getElementById("image");
       const statusEl = document.getElementById("status");
       const submitBtn = document.getElementById("submit");
       const copyBtn = document.getElementById("copy");
@@ -201,22 +580,33 @@
       const warningsEl = document.getElementById("warnings");
       const metaEl = document.getElementById("meta");
       const thumbEl = document.getElementById("thumb");
+      const fileNameEl = document.getElementById("fileName");
+      const fileInfoEl = document.getElementById("fileInfo");
 
       let lastYaml = "";
       let thumbObjectUrl = "";
       let statusBase = "";
       let statusStartedAt = 0;
       let statusTimer = null;
-      const imageInput = document.getElementById("image");
+
+      /**
+       * Formats a byte size for the file info line.
+       * @param {number} bytes - File size in bytes.
+       */
+      function formatBytes(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
 
       /**
        * Mounts an interactive Demo circuit from generated YAML into the preview panel.
-       * @param {string} yaml - Andy lab YAML source.
+       * @param {string} yaml - Andre lab YAML source.
        */
       function renderDemoPreview(yaml) {
         labMountEl.replaceChildren();
         if (!yaml.trim()) {
-          demoPreviewEl.hidden = true;
+          demoPreviewEl.classList.remove("is-visible");
           return;
         }
 
@@ -227,7 +617,7 @@
         code.textContent = yaml;
         pre.appendChild(code);
         labMountEl.appendChild(pre);
-        demoPreviewEl.hidden = false;
+        demoPreviewEl.classList.add("is-visible");
         mountCircuitLab(pre);
       }
 
@@ -256,12 +646,18 @@
         resetGeneratedResult();
         if (!(file instanceof File) || !file.type.startsWith("image/")) {
           thumbEl.removeAttribute("src");
-          resultEl.hidden = true;
+          dropEl.classList.remove("has-file");
+          resultEl.classList.remove("is-visible");
+          fileNameEl.textContent = "";
+          fileInfoEl.textContent = "";
           return;
         }
         thumbObjectUrl = URL.createObjectURL(file);
         thumbEl.src = thumbObjectUrl;
-        resultEl.hidden = false;
+        fileNameEl.textContent = file.name;
+        fileInfoEl.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
+        dropEl.classList.add("has-file");
+        resultEl.classList.add("is-visible");
         finishStatus("");
       }
 
@@ -351,7 +747,29 @@
       }
 
       imageInput.addEventListener("change", () => {
-        const file = imageInput.files?.[0];
+        previewSelectedImage(imageInput.files?.[0]);
+      });
+
+      ;["dragenter", "dragover"].forEach((eventName) => {
+        dropEl.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropEl.classList.add("is-drag");
+        });
+      });
+
+      ;["dragleave", "drop"].forEach((eventName) => {
+        dropEl.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropEl.classList.remove("is-drag");
+        });
+      });
+
+      dropEl.addEventListener("drop", (event) => {
+        const file = event.dataTransfer?.files?.[0];
+        if (!(file instanceof File)) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        imageInput.files = transfer.files;
         previewSelectedImage(file);
       });
 
@@ -405,14 +823,14 @@
 
           lastYaml = String(result.yaml || "");
           yamlEl.textContent = lastYaml;
-          metaEl.textContent = `provider: ${result.provider} · model: ${result.model}`;
-          warningsEl.innerHTML = "";
+          metaEl.textContent = `${result.provider} · ${result.model}`;
+          warningsEl.replaceChildren();
           for (const warning of result.warnings || []) {
             const li = document.createElement("li");
             li.textContent = String(warning);
             warningsEl.appendChild(li);
           }
-          resultEl.hidden = false;
+          resultEl.classList.add("is-visible");
           renderDemoPreview(lastYaml);
           copyBtn.disabled = !lastYaml;
           openBtn.disabled = !lastYaml;
@@ -433,8 +851,7 @@
       });
 
       openBtn.addEventListener("click", () => {
-        // Stash YAML for the main app to pick up via sessionStorage.
-        sessionStorage.setItem("andy:draftLabYaml", lastYaml);
+        sessionStorage.setItem("Andre:draftLabYaml", lastYaml);
         window.location.href = "/?lab=draft";
       });
     </script>
