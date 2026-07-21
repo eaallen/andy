@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Andy — Create lab from diagram image</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      html,
+      body {
+        overflow: auto;
+        height: auto;
+        background: #f4f4f5;
+      }
+      .author {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 1.25rem;
+        display: grid;
+        gap: 1rem;
+      }
+      .author header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.75rem 1.25rem;
+      }
+      .author header a {
+        color: #2563eb;
+      }
+      .panel {
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        padding: 1rem;
+        background: #fff;
+      }
+      .row {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      label {
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      input[type="text"],
+      textarea,
+      input[type="file"] {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      textarea {
+        min-height: 6rem;
+        font: inherit;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      button {
+        cursor: pointer;
+        border: 1px solid #111827;
+        background: #111827;
+        color: #fff;
+        border-radius: 8px;
+        padding: 0.55rem 0.9rem;
+        font: inherit;
+      }
+      button.secondary {
+        background: #fff;
+        color: #111827;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .status {
+        font-size: 0.9rem;
+        color: #374151;
+      }
+      .status.error {
+        color: #b91c1c;
+      }
+      .preview {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      @media (min-width: 800px) {
+        .preview {
+          grid-template-columns: 280px 1fr;
+        }
+      }
+      .preview img {
+        max-width: 100%;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #f9fafb;
+      }
+      pre.yaml {
+        margin: 0;
+        padding: 0.75rem;
+        overflow: auto;
+        max-height: 420px;
+        background: #0b1020;
+        color: #e5e7eb;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        line-height: 1.4;
+      }
+      ul.warnings {
+        margin: 0.5rem 0 0;
+        padding-left: 1.2rem;
+        color: #92400e;
+      }
+      .meta {
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="author">
+      <header>
+        <h1>Create lab from image</h1>
+        <a href="/">← Back to labs</a>
+      </header>
+
+      <section class="panel">
+        <p>
+          Upload a photo or screenshot of a wiring diagram. The Andy server uses
+          AI (Cursor SDK / Grok, or Gemini) to draft an Andy lab YAML you can
+          open in the circuit lab.
+        </p>
+        <form id="form">
+          <div class="row">
+            <label for="image">Diagram image</label>
+            <input id="image" name="image" type="file" accept="image/*" required />
+          </div>
+          <div class="row">
+            <label for="title">Title hint (optional)</label>
+            <input id="title" name="title" type="text" placeholder="e.g. Three-way hallway lights" />
+          </div>
+          <div class="row">
+            <label for="notes">Instructor notes (optional)</label>
+            <textarea
+              id="notes"
+              name="notes"
+              placeholder="Anything the model should know — shared neutrals, Front owns its own chime, etc."
+            ></textarea>
+          </div>
+          <div class="actions">
+            <button type="submit" id="submit">Generate YAML</button>
+            <button type="button" class="secondary" id="copy" disabled>Copy YAML</button>
+            <button type="button" class="secondary" id="openLab" disabled>Open in lab</button>
+            <span class="status" id="status"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel preview" id="result" hidden>
+        <div>
+          <h2>Source image</h2>
+          <img id="thumb" alt="Uploaded diagram preview" />
+          <p class="meta" id="meta"></p>
+          <ul class="warnings" id="warnings"></ul>
+        </div>
+        <div>
+          <h2>Generated YAML</h2>
+          <pre class="yaml" id="yaml"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      const form = document.getElementById("form");
+      const statusEl = document.getElementById("status");
+      const submitBtn = document.getElementById("submit");
+      const copyBtn = document.getElementById("copy");
+      const openBtn = document.getElementById("openLab");
+      const resultEl = document.getElementById("result");
+      const yamlEl = document.getElementById("yaml");
+      const warningsEl = document.getElementById("warnings");
+      const metaEl = document.getElementById("meta");
+      const thumbEl = document.getElementById("thumb");
+
+      let lastYaml = "";
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        statusEl.classList.remove("error");
+        statusEl.textContent = "Generating… this can take a bit.";
+        submitBtn.disabled = true;
+        copyBtn.disabled = true;
+        openBtn.disabled = true;
+
+        const fd = new FormData(form);
+        const file = fd.get("image");
+        if (file instanceof File) {
+          thumbEl.src = URL.createObjectURL(file);
+        }
+
+        try {
+          const res = await fetch("/api/diagrams/from-image", {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || res.statusText);
+          }
+
+          lastYaml = data.yaml || "";
+          yamlEl.textContent = lastYaml;
+          metaEl.textContent = `provider: ${data.provider} · model: ${data.model}`;
+          warningsEl.innerHTML = "";
+          for (const warning of data.warnings || []) {
+            const li = document.createElement("li");
+            li.textContent = warning;
+            warningsEl.appendChild(li);
+          }
+          resultEl.hidden = false;
+          copyBtn.disabled = !lastYaml;
+          openBtn.disabled = !lastYaml;
+          statusEl.textContent = "Done.";
+        } catch (err) {
+          statusEl.classList.add("error");
+          statusEl.textContent = err instanceof Error ? err.message : String(err);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(lastYaml);
+        statusEl.textContent = "YAML copied.";
+      });
+
+      openBtn.addEventListener("click", () => {
+        // Stash YAML for the main app to pick up via sessionStorage.
+        sessionStorage.setItem("andy:draftLabYaml", lastYaml);
+        window.location.href = "/?lab=draft";
+      });
+    </script>
+  </body>
+</html>

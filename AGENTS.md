@@ -1,30 +1,44 @@
 # AGENTS.md
 
-## Cursor Cloud specific instructions
+## Cursor Cloud / agent instructions
 
-This is a **buildless, static frontend** project (Remote Electrician Lab). There is no
-package manager, no `package.json`/lockfile, no build step, and no automated
-lint/test/build tooling. See `README.md` for the product overview.
+This is an **npm workspaces monorepo**:
 
-### Running the app (dev)
+| Path | Package | Stack |
+| --- | --- | --- |
+| `frontend/` | `@andy/frontend` | Vite, Vitest, Konva circuit lab |
+| `server/` | `@andy/server` | Hono, TypeScript, Cursor SDK / Gemini |
 
-Serve the repo root over HTTP and open `index.html`. Any static server works, e.g.:
+### Setup
 
 ```bash
-python3 -m http.server 8000   # then open http://localhost:8000/index.html
-# or: npx serve .
+npm install
+cp server/.env.example server/.env   # set CURSOR_API_KEY and/or GEMINI_API_KEY
 ```
 
-- Do **not** open `index.html` via `file://` — the app uses ES module imports and
-  `fetch()` (e.g. `js/lab-config.js` fetches `labs/doorbell.yaml`), which browsers block
-  over `file://`. It must be served over HTTP.
-- Runtime dependencies (Konva 9, js-yaml 4) are imported directly from the `esm.sh` CDN
-  and are **not vendored**, so the app requires outbound network access to
-  `https://esm.sh` to render. If offline, dependencies would need to be vendored first.
-- A `favicon.ico` 404 in the console is expected and harmless.
+Requires **Node.js ≥ 22.13** (Cursor SDK).
 
-### Lint / test / build
+### Dev
 
-None exist. Verification is manual/in-browser: load the served page, use **Demo** and
-**Lab** modes, wire terminals, press the Front/Rear/Side doorbell buttons, run **Test**
-(Front → Rear → Side) and **Check** (grading).
+```bash
+npm run dev:frontend   # http://localhost:5173
+npm run dev:server     # http://localhost:3001
+```
+
+Vite proxies `/api` → `http://localhost:3001`.
+
+### Tests / typecheck
+
+```bash
+npm test
+npm run typecheck
+```
+
+### AI diagram → YAML
+
+- Route: `POST /api/diagrams/from-image`
+- Provider selected by `AI_PROVIDER=cursor|gemini` (default `cursor`)
+- Lab schema prompt + validation live under `server/src/prompts` and `server/src/lab`
+- Author UI: `frontend/author.html`
+
+Do **not** invent new component types in generated YAML without adding a factory in `frontend/js/components.js`. See `frontend/public/labs/README.md`.

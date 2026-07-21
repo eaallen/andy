@@ -39,5 +39,14 @@ export default defineConfig(function (env) {
 
   return {
     test: testConfig,
+    server: {
+      proxy: {
+        // Forward AI / API calls to the Hono backend during local dev.
+        "/api": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+        },
+      },
+    },
   };
 });

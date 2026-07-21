@@ -11,12 +11,15 @@
       <nav class="lab-picker" aria-label="Choose lab">
         <label class="lab-picker-label" for="lab-select">Lab</label>
         <select id="lab-select" class="lab-picker-select"></select>
+        <a class="lab-picker-author" href="/author.html">Create from image</a>
       </nav>
       <div id="lab-root" class="lab-root"></div>
     </div>
 
     <script type="module">
       import { scanAndMountLabs } from "./js/circuit-lab.js";
+
+      const DRAFT_STORAGE_KEY = "andy:draftLabYaml";
 
       const LABS = [
         {
@@ -48,6 +51,11 @@
           id: "multi-wire-branch",
           src: "labs/multi-wire-branch.yaml",
           label: "Multi-Wire Branch",
+        },
+        {
+          id: "draft",
+          src: null,
+          label: "AI Draft (from image)",
         },
       ];
 
@@ -84,13 +92,23 @@
         location.assign(next.toString());
       });
 
-      const response = await fetch(lab.src);
-      if (!response.ok) {
-        throw new Error(
-          "Failed to load " + lab.src + " (HTTP " + response.status + ")"
-        );
+      let yaml = "";
+      if (lab.id === "draft") {
+        yaml = sessionStorage.getItem(DRAFT_STORAGE_KEY) || "";
+        if (!yaml.trim()) {
+          throw new Error(
+            "No AI draft YAML in session. Generate one at /author.html first.",
+          );
+        }
+      } else {
+        const response = await fetch(lab.src);
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load " + lab.src + " (HTTP " + response.status + ")",
+          );
+        }
+        yaml = await response.text();
       }
-      const yaml = await response.text();
 
       const root = document.getElementById("lab-root");
       const pre = document.createElement("pre");
