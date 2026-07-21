@@ -53,6 +53,17 @@ body {
   font-size: 13px;
 }
 
+.lab-picker-author {
+  margin-left: auto;
+  font-size: 13px;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.lab-picker-author:hover {
+  text-decoration: underline;
+}
+
 .lab-root {
   flex: 1 1 auto;
   min-height: 0;

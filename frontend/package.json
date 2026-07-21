@@ -1,0 +1,35 @@
+{
+  "name": "@andy/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Andy circuit lab frontend — Konva editor, Demo/Lab/Check modes, YAML lab loader.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:lib": "vite build --mode lib",
+    "publish": "npm run build:lib && cp dist/andy.js /Users/eli/availabooks/tools/api/andy.js",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eaallen/andy.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/eaallen/andy/issues"
+  },
+  "homepage": "https://github.com/eaallen/andy#readme",
+  "dependencies": {
+    "js-yaml": "^4.3.0",
+    "konva": "^10.3.0"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10",
+    "vitest-canvas-mock": "^1.1.4"
+  }
+}

@@ -1,35 +1,32 @@
 {
-  "name": "andy",
+  "name": "andy-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "A web-based circuit lab for USU Eastern students preparing for the Utah state electrician certification exam.",
-  "type": "module",
+  "description": "Remote Electrician Lab (Andy) — frontend circuit lab + AI diagram-to-YAML server.",
+  "workspaces": [
+    "frontend",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:lib": "vite build --mode lib",
-    "publish": "npm run build:lib && cp dist/andy.js /Users/eli/availabooks/tools/api/andy.js",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "npm run dev -w @andy/frontend",
+    "dev:frontend": "npm run dev -w @andy/frontend",
+    "dev:server": "npm run dev -w @andy/server",
+    "dev:all": "npm run dev -w @andy/server & npm run dev -w @andy/frontend",
+    "build": "npm run build -w @andy/frontend && npm run build -w @andy/server",
+    "build:frontend": "npm run build -w @andy/frontend",
+    "build:lib": "npm run build:lib -w @andy/frontend",
+    "build:server": "npm run build -w @andy/server",
+    "test": "npm run test -w @andy/frontend && npm run test -w @andy/server",
+    "test:frontend": "npm run test -w @andy/frontend",
+    "test:server": "npm run test -w @andy/server",
+    "typecheck": "npm run typecheck -w @andy/server"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/eaallen/andy.git"
   },
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/eaallen/andy/issues"
-  },
-  "homepage": "https://github.com/eaallen/andy#readme",
-  "dependencies": {
-    "js-yaml": "^4.3.0",
-    "konva": "^10.3.0"
-  },
-  "devDependencies": {
-    "jsdom": "^29.1.1",
-    "vite": "^8.1.4",
-    "vitest": "^4.1.10",
-    "vitest-canvas-mock": "^1.1.4"
+  "engines": {
+    "node": ">=22.13.0"
   }
 }
