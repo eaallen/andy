@@ -290,7 +290,8 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Opens all toggle switches and clears light feedback (used when rewiring the stage).
+   * Opens all toggle switches to their default throw, then re-simulates so
+   * loads that are live with defaults (e.g. both 3-ways on T1) show correctly.
    */
   function resetSwitchAndLoadFeedback() {
     const list = componentList();
@@ -300,7 +301,8 @@ export function bootCircuitLab(host, config) {
         applySwitchVisual(component, { closed: false });
       }
     }
-    applyLoadFeedback({}, { playSounds: false });
+    const result = simulator.simulate(closedToggleIds());
+    applyLoadFeedback(result.energized, { playSounds: false });
   }
 
   /**

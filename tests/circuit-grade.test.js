@@ -703,7 +703,7 @@ describe("Utah exam catalog labs", () => {
     return grader.grade();
   }
 
-  it("passes Check on three-way demo wiring for all traveler combinations", () => {
+  it("lights the three-way lamp on default T1/T1 and toggles with either switch", () => {
     const config = loadLab("three-way-lamp.yaml");
     const fixture = createFixtureFromLabConfig(config);
     const simulator = createCircuitSimulator(
@@ -716,6 +716,8 @@ describe("Utah exam catalog labs", () => {
       config.simulation
     );
 
+    // Default throw (both COM→T1) must energize — Demo/Lab UI must simulate after reset,
+    // not clear lamp feedback, or the lamp stays dark while both switches read T1.
     expect(simulator.simulate([]).energized.lamp).toBe(true);
     expect(simulator.simulate(["sw1"]).energized.lamp).toBe(false);
     expect(simulator.simulate(["sw2"]).energized.lamp).toBe(false);
