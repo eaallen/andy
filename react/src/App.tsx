@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Layer, Stage } from "react-konva";
 import { DoorbellButton } from "./comps/DoorbellButton";
@@ -110,6 +110,43 @@ function zoomAt(
   );
 }
 
+type LabLayerProps = {
+  pressed: PressedState;
+  onPressedChange: (id: ButtonId, pressed: boolean) => void;
+};
+
+/**
+ * Circuit shapes live here so pan/zoom view updates on App do not
+ * re-reconcile every module — only Stage transform props change.
+ */
+const LabLayer = memo(function LabLayer({
+  pressed,
+  onPressedChange,
+}: LabLayerProps) {
+  return (
+    <Layer>
+      <DoorbellButton
+        id="front"
+        x={120}
+        y={160}
+        title="Front"
+        pressed={pressed.front}
+        onPressedChange={onPressedChange}
+      />
+      <DoorbellButton
+        id="rear"
+        x={420}
+        y={160}
+        title="Rear"
+        pressed={pressed.rear}
+        onPressedChange={onPressedChange}
+      />
+      <Switch />
+      <Module width={100} height={100} title="Switch" />
+    </Layer>
+  );
+});
+
 /**
  * Experimental React + Konva lab shell.
  * Keeps canvas pieces as declarative components driven by React state.
@@ -161,10 +198,11 @@ export function App() {
 
   /**
    * Updates one button's pressed flag.
+   * Stable identity so memoized LabLayer can skip pan/zoom re-renders.
    */
-  function setButtonPressed(id: ButtonId, isDown: boolean) {
+  const setButtonPressed = useCallback((id: ButtonId, isDown: boolean) => {
     setPressed((prev) => ({ ...prev, [id]: isDown }));
-  }
+  }, []);
 
   /**
    * Clears all button pressed state.
@@ -268,30 +306,7 @@ export function App() {
             y={view.y}
             onWheel={handleWheel}
           >
-            <Layer>
-              <DoorbellButton
-                id="front"
-                x={120}
-                y={160}
-                title="Front"
-                pressed={pressed.front}
-                onPressedChange={setButtonPressed}
-              />
-              <DoorbellButton
-                id="rear"
-                x={420}
-                y={160}
-                title="Rear"
-                pressed={pressed.rear}
-                onPressedChange={setButtonPressed}
-              />
-              <Switch />
-              <Module width={100} height={100} title="Switch"></Module>
-              {/* stress testing */}
-              {Array.from({ length: 10000 }).map((_, index) => (
-                <Module key={index} width={100} height={100} x={index * 10} y={index * 10} title={`Module ${index}`} />
-              ))}
-            </Layer>
+            <LabLayer pressed={pressed} onPressedChange={setButtonPressed} />
           </Stage>
         ) : null}
       </div>
