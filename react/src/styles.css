@@ -100,21 +100,14 @@ body {
   /* Let Konva own touch pans/zooms instead of the browser scrolling the page. */
   touch-action: none;
   overscroll-behavior: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 120px),
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 19px,
-      rgba(148, 163, 184, 0.18) 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 19px,
-      rgba(148, 163, 184, 0.18) 20px
-    ),
-    #f8fafc;
+  /* FigJam-style soft canvas with a subtle dotted grid. */
+  background-color: #e8e8e8;
+  background-image: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.14) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
 }
 
 .stage-wrap canvas {
