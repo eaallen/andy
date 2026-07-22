@@ -61,8 +61,31 @@ body {
   background: #7dd3fc;
 }
 
+.toolbar-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.toolbar-zoom span {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-zoom button {
+  min-width: 2.25rem;
+  padding-inline: 0.55rem;
+}
+
 .stage-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 120px),
     repeating-linear-gradient(
