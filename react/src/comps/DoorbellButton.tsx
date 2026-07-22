@@ -1,5 +1,5 @@
 import { Circle } from "react-konva";
-import { Module } from "./comps/Module";
+import { Module } from "./Module";
 
 const WIDTH = 160;
 const HEIGHT = 120;

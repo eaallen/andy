@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Layer, Stage } from "react-konva";
-import { DoorbellButton } from "./DoorbellButton";
+import { DoorbellButton } from "./comps/DoorbellButton";
 import { Switch } from "./comps/Switch";
 import { Module } from "./comps/Module";
 
