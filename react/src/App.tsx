@@ -1268,6 +1268,7 @@ export function App() {
       segmentIndex: number,
       e: KonvaEventObject<MouseEvent | TouchEvent>,
     ) => {
+      e.evt.preventDefault();
       const maybeStage = e.target.getStage();
       if (!maybeStage) return;
       const stageNode: KonvaStage = maybeStage;
@@ -1281,7 +1282,8 @@ export function App() {
       /**
        * Inserts the bend once the pointer moves, then updates its position.
        */
-      function onMove() {
+      function onMove(evt: KonvaEventObject<MouseEvent | TouchEvent>) {
+        evt.evt.preventDefault();
         const pos = stageNode.getPointerPosition();
         if (!pos) return;
         const world = pointerToWorld(pos, viewRef.current);
@@ -1334,6 +1336,7 @@ export function App() {
    */
   const handleTerminalPointerDown = useCallback(
     (terminalId: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      e.evt.preventDefault();
       const maybeStage = e.target.getStage();
       if (!maybeStage) return;
       const stageNode: KonvaStage = maybeStage;
@@ -1352,7 +1355,8 @@ export function App() {
       /**
        * Updates the rubber-band draft once the pointer has moved enough.
        */
-      function onMove() {
+      function onMove(evt: KonvaEventObject<MouseEvent | TouchEvent>) {
+        evt.evt.preventDefault();
         const gesture = gestureRef.current;
         if (!gesture) return;
         const pos = stageNode.getPointerPosition();
@@ -1443,6 +1447,8 @@ export function App() {
   const handleStagePointerDown = useCallback(
     (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (e.target !== e.target.getStage()) return;
+      // Stop mobile browsers from scrolling the page while we pan the lab.
+      e.evt.preventDefault();
       const maybeStage = e.target.getStage();
       if (!maybeStage) return;
       const stageNode: KonvaStage = maybeStage;
@@ -1456,7 +1462,8 @@ export function App() {
       /**
        * Pans the view by the pointer delta (content follows the drag).
        */
-      function onMove() {
+      function onMove(evt: KonvaEventObject<MouseEvent | TouchEvent>) {
+        evt.evt.preventDefault();
         const pos = stageNode.getPointerPosition();
         if (!pos) return;
         const dx = pos.x - origin.x;
