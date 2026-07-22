@@ -10,6 +10,18 @@ const MAX_SCALE = 3;
 const BUTTON_SCALE_BY = 1.2;
 /** Pinch / ctrl+wheel sensitivity (higher = faster zoom). */
 const PINCH_ZOOM_INTENSITY = 0.01;
+/** How many pixels of content must stay on-screen at each edge. */
+const EDGE_MARGIN = 72;
+/**
+ * World-space box covering lab content. Pan stops once this box
+ * is about to leave the viewport.
+ */
+const CONTENT_BOUNDS = {
+  minX: 0,
+  minY: 0,
+  maxX: 580,
+  maxY: 280,
+};
 
 type ButtonId = "front" | "rear";
 
@@ -26,7 +38,22 @@ type StageSize = {
   height: number;
 };
 
+type ContentBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
 const INITIAL_VIEW: ViewState = { scale: 1, x: 0, y: 0 };
+
+/**
+ * Clamps a number into [min, max], centering when the range is empty.
+ */
+function clampRange(value: number, min: number, max: number) {
+  if (min > max) return (min + max) / 2;
+  return Math.min(max, Math.max(min, value));
+}
 
 /**
  * Clamps stage scale between zoom limits.
@@ -36,23 +63,51 @@ function clampScale(scale: number) {
 }
 
 /**
+ * Keeps content from panning completely off-screen.
+ * Leaves EDGE_MARGIN pixels of the content box visible at the limit.
+ */
+function clampView(
+  view: ViewState,
+  viewport: StageSize,
+  content: ContentBounds = CONTENT_BOUNDS,
+): ViewState {
+  if (viewport.width <= 0 || viewport.height <= 0) return view;
+
+  const { scale } = view;
+  const minX = EDGE_MARGIN - content.maxX * scale;
+  const maxX = viewport.width - EDGE_MARGIN - content.minX * scale;
+  const minY = EDGE_MARGIN - content.maxY * scale;
+  const maxY = viewport.height - EDGE_MARGIN - content.minY * scale;
+
+  return {
+    scale,
+    x: clampRange(view.x, minX, maxX),
+    y: clampRange(view.y, minY, maxY),
+  };
+}
+
+/**
  * Zooms the stage around a pointer so that point stays under the cursor.
  */
 function zoomAt(
   view: ViewState,
   pointer: { x: number; y: number },
   nextScale: number,
+  viewport: StageSize,
 ): ViewState {
   const scale = clampScale(nextScale);
   const pointTo = {
     x: (pointer.x - view.x) / view.scale,
     y: (pointer.y - view.y) / view.scale,
   };
-  return {
-    scale,
-    x: pointer.x - pointTo.x * scale,
-    y: pointer.y - pointTo.y * scale,
-  };
+  return clampView(
+    {
+      scale,
+      x: pointer.x - pointTo.x * scale,
+      y: pointer.y - pointTo.y * scale,
+    },
+    viewport,
+  );
 }
 
 /**
@@ -90,6 +145,12 @@ export function App() {
     return () => observer.disconnect();
   }, []);
 
+  // Re-clamp pan when the viewport size changes.
+  useEffect(() => {
+    if (size.width <= 0 || size.height <= 0) return;
+    setView((prev) => clampView(prev, size));
+  }, [size]);
+
   const status = useMemo(() => {
     const active = Object.entries(pressed)
       .filter(([, isDown]) => isDown)
@@ -121,6 +182,7 @@ export function App() {
         prev,
         { x: size.width / 2, y: size.height / 2 },
         prev.scale * factor,
+        size,
       ),
     );
   }
@@ -129,7 +191,7 @@ export function App() {
    * Resets stage scale and pan to the default view.
    */
   function resetView() {
-    setView(INITIAL_VIEW);
+    setView(clampView(INITIAL_VIEW, size));
   }
 
   /**
@@ -157,16 +219,21 @@ export function App() {
 
       setView((prev) => {
         const nextScale = prev.scale * Math.exp(-deltaY * PINCH_ZOOM_INTENSITY);
-        return zoomAt(prev, pointer, nextScale);
+        return zoomAt(prev, pointer, nextScale, size);
       });
       return;
     }
 
-    setView((prev) => ({
-      ...prev,
-      x: prev.x - deltaX,
-      y: prev.y - deltaY,
-    }));
+    setView((prev) =>
+      clampView(
+        {
+          ...prev,
+          x: prev.x - deltaX,
+          y: prev.y - deltaY,
+        },
+        size,
+      ),
+    );
   }
 
   return (
