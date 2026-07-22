@@ -8,9 +8,14 @@ export type WireEdge = {
 export type Adjacency = Map<string, string[]>;
 
 /**
- * When a component id is closed, these terminal pairs conduct.
+ * Device-internal terminal pair that conducts only while closed
+ * (SPST switch, doorbell press, etc.). Applied during BFS, not as wire edges.
  */
-export type ComponentBridges = Record<string, WireEdge[]>;
+export type ContinuityGate = {
+  a: string;
+  b: string;
+  closed: boolean;
+};
 
 /**
  * Ensures a node exists in the adjacency map.
@@ -38,8 +43,8 @@ function link(adj: Adjacency, a: string, b: string) {
 }
 
 /**
- * Builds an undirected adjacency map from wire and bridge edges.
- * @param {WireEdge[]} edges - Terminal-to-terminal links (wires and bridges).
+ * Builds an undirected adjacency map from student wire edges only.
+ * @param edges - Terminal-to-terminal wire links.
  */
 export function buildAdjacency(edges: WireEdge[]): Adjacency {
   const adj: Adjacency = new Map();
@@ -50,37 +55,45 @@ export function buildAdjacency(edges: WireEdge[]): Adjacency {
 }
 
 /**
- * Collects internal bridge edges for currently closed components.
- * @param {string[]} closedIds - Component ids that are pressed / closed.
- * @param {ComponentBridges} bridgesByComponent - Per-component bridge pairs.
+ * Returns the other side of each closed gate that touches `key`.
+ * @param {string} key - Terminal key being visited.
+ * @param {ContinuityGate[] | undefined} gates - Device gates (open ones ignored).
  */
-export function bridgeEdgesForClosed(
-  closedIds: string[],
-  bridgesByComponent: ComponentBridges,
-): WireEdge[] {
-  const edges: WireEdge[] = [];
-  for (const id of closedIds) {
-    const bridges = bridgesByComponent[id];
-    if (!bridges) continue;
-    for (const edge of bridges) {
-      edges.push(edge);
-    }
+function gatedNeighbors(
+  key: string,
+  gates: ContinuityGate[] | undefined,
+): string[] {
+  if (!gates || gates.length === 0) return [];
+  const next: string[] = [];
+  for (const gate of gates) {
+    if (!gate.closed) continue;
+    if (gate.a === key) next.push(gate.b);
+    else if (gate.b === key) next.push(gate.a);
   }
-  return edges;
+  return next;
 }
 
 /**
  * Runs BFS from a start terminal and returns every reachable terminal key.
- * @param adj - Undirected neighbor map.
+ * Closed continuity gates act as temporary hops between their terminals.
+ * @param adj - Undirected neighbor map from wires.
  * @param start - Terminal key to start from.
+ * @param gates - Optional device gates (switch/button closed state).
  */
-export function reachableFrom(adj: Adjacency, start: string): Set<string> {
+export function reachableFrom(
+  adj: Adjacency,
+  start: string,
+  gates?: ContinuityGate[],
+): Set<string> {
   const visited = new Set<string>([start]);
   const queue = [start];
 
   while (queue.length > 0) {
     const current = queue.shift()!;
-    const neighbors = adj.get(current) ?? [];
+    const neighbors = [
+      ...(adj.get(current) ?? []),
+      ...gatedNeighbors(current, gates),
+    ];
     for (const next of neighbors) {
       if (visited.has(next)) continue;
       visited.add(next);
@@ -93,11 +106,17 @@ export function reachableFrom(adj: Adjacency, start: string): Set<string> {
 
 /**
  * Returns whether two terminals are in the same connected component.
- * @param {Adjacency} adj - Undirected neighbor map.
+ * @param {Adjacency} adj - Undirected neighbor map from wires.
  * @param {string} a - First terminal key.
  * @param {string} b - Second terminal key.
+ * @param {ContinuityGate[]} [gates] - Optional device gates.
  */
-export function areConnected(adj: Adjacency, a: string, b: string): boolean {
+export function areConnected(
+  adj: Adjacency,
+  a: string,
+  b: string,
+  gates?: ContinuityGate[],
+): boolean {
   if (a === b) return true;
-  return reachableFrom(adj, a).has(b);
+  return reachableFrom(adj, a, gates).has(b);
 }

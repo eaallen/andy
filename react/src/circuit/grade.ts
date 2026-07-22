@@ -23,7 +23,7 @@ export type ContinuityGrade = {
 };
 
 /**
- * Grades wire-only continuity checks (no switch bridges).
+ * Grades wire-only continuity checks (ignores switch/button gates).
  * @param {WireEdge[]} wires - Student wires as terminal key pairs.
  * @param {ContinuityCheck[]} checks - Expected from→to paths.
  */

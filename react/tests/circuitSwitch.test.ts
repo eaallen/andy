@@ -1,33 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { LAB_BRIDGES } from "../src/circuit/labBridges";
-import {
-  areConnected,
-  bridgeEdgesForClosed,
-  buildAdjacency,
-} from "../src/circuit/graph";
+import { areConnected, buildAdjacency } from "../src/circuit/graph";
 import { isLoadEnergized } from "../src/circuit/energize";
 import { SWITCH_TERMINALS } from "../src/comps/Switch";
 import { terminalKey } from "../src/comps/terminals";
 
-describe("LAB_BRIDGES switch", () => {
-  it("bridges COM to NO only when the switch id is closed", () => {
-    const com = terminalKey("switch", "top", SWITCH_TERMINALS.com);
-    const no = terminalKey("switch", "top", SWITCH_TERMINALS.no);
+describe("SPST switch continuity gate", () => {
+  const com = terminalKey("switch", "top", SWITCH_TERMINALS.com);
+  const no = terminalKey("switch", "top", SWITCH_TERMINALS.no);
 
-    expect(LAB_BRIDGES.switch).toEqual([{ from: com, to: no }]);
+  it("connects COM to NO only while the gate is closed", () => {
+    const adj = buildAdjacency([]);
+    const open = { a: com, b: no, closed: false };
+    const closed = { a: com, b: no, closed: true };
 
-    const openAdj = buildAdjacency(bridgeEdgesForClosed([], LAB_BRIDGES));
-    expect(areConnected(openAdj, com, no)).toBe(false);
-
-    const closedAdj = buildAdjacency(
-      bridgeEdgesForClosed(["switch"], LAB_BRIDGES),
-    );
-    expect(areConnected(closedAdj, com, no)).toBe(true);
+    expect(areConnected(adj, com, no, [open])).toBe(false);
+    expect(areConnected(adj, com, no, [closed])).toBe(true);
   });
 
   it("lights a series lamp only while the SPST switch is closed", () => {
-    const com = terminalKey("switch", "top", SWITCH_TERMINALS.com);
-    const no = terminalKey("switch", "top", SWITCH_TERMINALS.no);
     const supply = {
       hot: ["power:top:0"],
       return: "power:top:1",
@@ -41,14 +31,12 @@ describe("LAB_BRIDGES switch", () => {
       { from: no, to: "lamp:bottom:0" },
       { from: "power:top:1", to: "lamp:bottom:1" },
     ];
+    const adj = buildAdjacency(wires);
+    const gate = { a: com, b: no, closed: false };
 
-    const openAdj = buildAdjacency(wires);
-    expect(isLoadEnergized(openAdj, supply, lamp)).toBe(false);
-
-    const closedAdj = buildAdjacency([
-      ...wires,
-      ...bridgeEdgesForClosed(["switch"], LAB_BRIDGES),
-    ]);
-    expect(isLoadEnergized(closedAdj, supply, lamp)).toBe(true);
+    expect(isLoadEnergized(adj, supply, lamp, [gate])).toBe(false);
+    expect(
+      isLoadEnergized(adj, supply, lamp, [{ ...gate, closed: true }]),
+    ).toBe(true);
   });
 });

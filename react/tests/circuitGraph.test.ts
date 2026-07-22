@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   areConnected,
-  bridgeEdgesForClosed,
   buildAdjacency,
   reachableFrom,
-  type ComponentBridges,
+  type ContinuityGate,
   type WireEdge,
 } from "../src/circuit/graph";
 
@@ -42,49 +41,33 @@ describe("areConnected / reachableFrom", () => {
     expect(areConnected(adj, "A", "A")).toBe(true);
   });
 
-  it("finds a path that only exists when a switch bridge is closed", () => {
+  it("finds a path that only exists when a continuity gate is closed", () => {
     const wires: WireEdge[] = [
       { from: "supply", to: "front:top:0" },
       { from: "front:top:1", to: "load" },
     ];
-    const bridges: ComponentBridges = {
-      front: [{ from: "front:top:0", to: "front:top:1" }],
+    const adj = buildAdjacency(wires);
+    const openGate: ContinuityGate = {
+      a: "front:top:0",
+      b: "front:top:1",
+      closed: false,
     };
+    const closedGate: ContinuityGate = { ...openGate, closed: true };
 
-    const openAdj = buildAdjacency(wires);
-    expect(areConnected(openAdj, "supply", "load")).toBe(false);
-
-    const closedAdj = buildAdjacency([
-      ...wires,
-      ...bridgeEdgesForClosed(["front"], bridges),
-    ]);
-    expect(areConnected(closedAdj, "supply", "load")).toBe(true);
+    expect(areConnected(adj, "supply", "load", [openGate])).toBe(false);
+    expect(areConnected(adj, "supply", "load", [closedGate])).toBe(true);
   });
 
-  it("drops the bridge path when the switch is open", () => {
+  it("ignores open gates", () => {
     const wires: WireEdge[] = [
       { from: "supply", to: "front:top:0" },
       { from: "front:top:1", to: "load" },
     ];
-    const bridges: ComponentBridges = {
-      front: [{ from: "front:top:0", to: "front:top:1" }],
-    };
-    const adj = buildAdjacency([
-      ...wires,
-      ...bridgeEdgesForClosed([], bridges),
-    ]);
-    expect(areConnected(adj, "supply", "load")).toBe(false);
-  });
-});
-
-describe("bridgeEdgesForClosed", () => {
-  it("only emits bridges for listed closed ids", () => {
-    const bridges: ComponentBridges = {
-      front: [{ from: "front:top:0", to: "front:top:1" }],
-      rear: [{ from: "rear:top:0", to: "rear:top:1" }],
-    };
-    expect(bridgeEdgesForClosed(["rear"], bridges)).toEqual([
-      { from: "rear:top:0", to: "rear:top:1" },
-    ]);
+    const adj = buildAdjacency(wires);
+    expect(
+      areConnected(adj, "supply", "load", [
+        { a: "front:top:0", b: "front:top:1", closed: false },
+      ]),
+    ).toBe(false);
   });
 });

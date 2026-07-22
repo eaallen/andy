@@ -8,7 +8,7 @@ import { AppCtxProvider } from "./appCtx";
 import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
 import { Lamp, LAMP_SIZE, LAMP_TERMINALS } from "./comps/Lamp";
 import { Power, POWER_SIZE, POWER_TERMINALS } from "./comps/Power";
-import { Switch, SWITCH_SIZE } from "./comps/Switch";
+import { Switch, SWITCH_SIZE, SWITCH_TERMINALS } from "./comps/Switch";
 import {
   pointerCursorHandlers,
   setStageCursor,
@@ -29,10 +29,9 @@ import {
 } from "./comps/wirePath";
 import { isLoadEnergized } from "./circuit/energize";
 import {
-  bridgeEdgesForClosed,
   buildAdjacency,
+  type ContinuityGate,
 } from "./circuit/graph";
-import { LAB_BRIDGES } from "./circuit/labBridges";
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -1014,22 +1013,36 @@ export function App() {
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
   const wireMode = draft !== null;
 
-  /** Continuity graph: student wires plus bridges for closed switches / buttons. */
+  /** Wire graph only; switches/buttons hop via continuity gates below. */
   const adjacency = useMemo(() => {
-    const wireEdges = wires.map((w) => ({ from: w.from, to: w.to }));
-    const closedIds = [
-      ...(Object.keys(pressed) as ButtonId[]).filter((id) => pressed[id]),
-      ...(switchClosed ? (["switch"] as const) : []),
+    return buildAdjacency(wires.map((w) => ({ from: w.from, to: w.to })));
+  }, [wires]);
+
+  /** Closed devices may hop between their own terminals during BFS. */
+  const continuityGates = useMemo((): ContinuityGate[] => {
+    return [
+      {
+        a: terminalKey("front", "top", 0),
+        b: terminalKey("front", "top", 1),
+        closed: pressed.front,
+      },
+      {
+        a: terminalKey("rear", "top", 0),
+        b: terminalKey("rear", "top", 1),
+        closed: pressed.rear,
+      },
+      {
+        a: terminalKey("switch", "top", SWITCH_TERMINALS.com),
+        b: terminalKey("switch", "top", SWITCH_TERMINALS.no),
+        closed: switchClosed,
+      },
     ];
-    return buildAdjacency([
-      ...wireEdges,
-      ...bridgeEdgesForClosed(closedIds, LAB_BRIDGES),
-    ]);
-  }, [wires, pressed, switchClosed]);
+  }, [pressed, switchClosed]);
 
   const lampLit = useMemo(
-    () => isLoadEnergized(adjacency, LAB_SUPPLY, LAB_LAMP_LOAD),
-    [adjacency],
+    () =>
+      isLoadEnergized(adjacency, LAB_SUPPLY, LAB_LAMP_LOAD, continuityGates),
+    [adjacency, continuityGates],
   );
 
   /**

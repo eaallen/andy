@@ -3,12 +3,7 @@ import {
   isLoadEnergized,
   isLoadPolarityCorrect,
 } from "../src/circuit/energize";
-import {
-  bridgeEdgesForClosed,
-  buildAdjacency,
-  type ComponentBridges,
-  type WireEdge,
-} from "../src/circuit/graph";
+import { buildAdjacency, type WireEdge } from "../src/circuit/graph";
 
 const SUPPLY = {
   hot: ["power:top:0"],
@@ -55,24 +50,23 @@ describe("isLoadEnergized", () => {
     expect(isLoadEnergized(adj, SUPPLY, LAMP)).toBe(false);
   });
 
-  it("lights only while a series switch bridge is closed", () => {
+  it("lights only while a series continuity gate is closed", () => {
     const wires: WireEdge[] = [
       { from: "power:top:0", to: "front:top:0" },
       { from: "front:top:1", to: "lamp:bottom:0" },
       { from: "power:top:1", to: "lamp:bottom:1" },
     ];
-    const bridges: ComponentBridges = {
-      front: [{ from: "front:top:0", to: "front:top:1" }],
+    const adj = buildAdjacency(wires);
+    const gate = {
+      a: "front:top:0",
+      b: "front:top:1",
+      closed: false,
     };
 
-    const openAdj = buildAdjacency(wires);
-    expect(isLoadEnergized(openAdj, SUPPLY, LAMP)).toBe(false);
-
-    const closedAdj = buildAdjacency([
-      ...wires,
-      ...bridgeEdgesForClosed(["front"], bridges),
-    ]);
-    expect(isLoadEnergized(closedAdj, SUPPLY, LAMP)).toBe(true);
+    expect(isLoadEnergized(adj, SUPPLY, LAMP, [gate])).toBe(false);
+    expect(
+      isLoadEnergized(adj, SUPPLY, LAMP, [{ ...gate, closed: true }]),
+    ).toBe(true);
   });
 
   it("returns false when supply has no hot terminals", () => {
