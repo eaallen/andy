@@ -59,6 +59,11 @@ grading:
     - from: lampB.n
       to: power.n
       fail: "Lamp B neutral is not wired to the shared power neutral."
+  polarity:
+    - load: lampA
+      fail: "Lamp A hot and neutral are reversed."
+    - load: lampB
+      fail: "Lamp B hot and neutral are reversed."
   whenClosed:
     - closed: []
       energize: [lampA, lampB]

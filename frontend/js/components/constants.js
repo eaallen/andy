@@ -76,3 +76,31 @@ export const WIRE_COLOR_OPTIONS = [
   { id: "green", label: "Green", hex: WIRE_COLORS.green },
   { id: "purple", label: "Purple", hex: WIRE_COLORS.purple },
 ];
+
+/**
+ * Builds ordered picker entries for a list of known wire color ids.
+ * @param {string[]} colorIds - Color keys from WIRE_COLORS.
+ */
+export function wireColorOptionsFor(colorIds) {
+  const options = [];
+  for (let i = 0; i < colorIds.length; i += 1) {
+    const id = colorIds[i];
+    const known = WIRE_COLOR_OPTIONS.find(function (entry) {
+      return entry.id === id;
+    });
+    if (known) {
+      options.push(known);
+      continue;
+    }
+    const hex = WIRE_COLORS[id];
+    if (!hex) {
+      continue;
+    }
+    options.push({
+      id: id,
+      label: id.charAt(0).toUpperCase() + id.slice(1),
+      hex: hex,
+    });
+  }
+  return options;
+}

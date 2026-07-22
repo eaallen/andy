@@ -21,7 +21,17 @@ export const TERMINALS_BY_TYPE: Record<string, readonly string[]> = {
 
 export const KNOWN_TYPES = new Set(Object.keys(TERMINALS_BY_TYPE));
 
-export const WIRE_COLORS = new Set(["red", "gray", "blue", "green"]);
+export const WIRE_COLORS = new Set([
+  "black",
+  "white",
+  "red",
+  "blue",
+  "yellow",
+  "orange",
+  "green",
+  "purple",
+  "gray",
+]);
 
 export function terminalsForComponent(
   type: string,

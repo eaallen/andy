@@ -1,6 +1,6 @@
 import Konva from "konva";
 import { applyDoorbellButtonVisual } from "./components/button.js";
-import { COMPONENT_TYPES, DEFAULT_WIRE_COLOR, WIRE_COLORS } from "./components/constants.js";
+import { COMPONENT_TYPES } from "./components/constants.js";
 import { applyLampVisual } from "./components/lamp.js";
 import { createLayoutFromConfig } from "./components/registry.js";
 import { findTerminal } from "./components/shared.js";
@@ -33,7 +33,8 @@ import {
  */
 export function bootCircuitLab(host, config) {
   let mode = "demo";
-  let wireColor = DEFAULT_WIRE_COLOR;
+  let wireColor = config.defaultWireColor;
+  const availableWireColors = config.wireColors || [];
   let components = null;
   let testingSequence = false;
   /** @type {Array<object>|null} */
@@ -401,6 +402,7 @@ export function bootCircuitLab(host, config) {
 
   const wireMenu = stageWrap
     ? createWireMenu(stageWrap, {
+        colorOptions: config.wireColorOptions,
         onDelete: function () {
           wireManager.removeSelectedWire();
           wireMenu.close();
@@ -677,17 +679,6 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Adopts a terminal's suggested color when it is in the wire palette.
-   * @param {object} terminal - Terminal metadata.
-   */
-  function maybeAdoptTerminalColor(terminal) {
-    const color = terminal.wireColor;
-    if (color && WIRE_COLORS[color]) {
-      setWireColor(color);
-    }
-  }
-
-  /**
    * Lab click-or-drag wire gesture: tap to pending/connect, drag for rubber-band.
    * @param {object} terminal - Terminal metadata.
    * @param {Konva.KonvaEventObject} evt - Pointer down event.
@@ -737,7 +728,6 @@ export function bootCircuitLab(host, config) {
         }
         wireManager.clearWireSelection();
         wireManager.clearPendingHighlight();
-        maybeAdoptTerminalColor(terminal);
         stage.container().style.cursor = "crosshair";
       }
 
@@ -763,9 +753,6 @@ export function bootCircuitLab(host, config) {
         wireMenu.close();
       }
       wireManager.clearWireSelection();
-      if (!wireManager.hasPendingTerminal()) {
-        maybeAdoptTerminalColor(terminal);
-      }
       wireManager.handleTerminalClick(terminal, wireColor, true);
     }
 
@@ -953,10 +940,10 @@ export function bootCircuitLab(host, config) {
 
   /**
    * Remembers the active wire color for new wires.
-   * @param {string} colorKey - Color key in WIRE_COLORS.
+   * @param {string} colorKey - Color key from the lab palette.
    */
   function setWireColor(colorKey) {
-    if (!WIRE_COLORS[colorKey]) {
+    if (availableWireColors.indexOf(colorKey) === -1) {
       return;
     }
     wireColor = colorKey;
@@ -1251,7 +1238,7 @@ export function bootCircuitLab(host, config) {
   window.addEventListener("resize", handleResize);
 
   syncModeButtons();
-  setWireColor(DEFAULT_WIRE_COLOR);
+  setWireColor(config.defaultWireColor);
   syncZoomLabel();
   ensureComponents();
   showDemoCircuit();

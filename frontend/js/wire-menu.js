@@ -1,4 +1,4 @@
-import { WIRE_COLOR_OPTIONS } from "./components/constants.js";
+import { WIRE_COLOR_OPTIONS, WIRE_COLORS } from "./components/constants.js";
 
 const WIRE_MENU_GAP = 10;
 const WIRE_MENU_MARGIN = 8;
@@ -25,6 +25,7 @@ const CLOSE_ICON =
  *   onDelete: () => void,
  *   onPickColor: (colorKey: string) => void,
  *   onDismiss: () => void,
+ *   colorOptions?: Array<{ id: string, label: string, hex: string }>,
  * }} handlers - Menu action handlers.
  */
 export function createWireMenu(mount, handlers) {
@@ -34,8 +35,13 @@ export function createWireMenu(mount, handlers) {
   el.setAttribute("aria-label", "Wire actions");
   el.hidden = true;
 
+  const colorOptions =
+    handlers.colorOptions && handlers.colorOptions.length
+      ? handlers.colorOptions
+      : WIRE_COLOR_OPTIONS;
+
   let colorPickerOpen = false;
-  let currentColor = "red";
+  let currentColor = colorOptions[0] ? colorOptions[0].id : "black";
   let canDelete = true;
   let worldAnchor = /** @type {{ x: number; y: number }|null} */ (null);
   let lastScreen = /** @type {{ x: number; y: number }|null} */ (null);
@@ -43,13 +49,38 @@ export function createWireMenu(mount, handlers) {
   let suppressOutside = false;
 
   /**
+   * Resolves a swatch entry for the current color key.
+   * @param {string} colorKey - Color id.
+   */
+  function resolveColorEntry(colorKey) {
+    const fromPalette = colorOptions.find(function (entry) {
+      return entry.id === colorKey;
+    });
+    if (fromPalette) {
+      return fromPalette;
+    }
+    const fromDefaults = WIRE_COLOR_OPTIONS.find(function (entry) {
+      return entry.id === colorKey;
+    });
+    if (fromDefaults) {
+      return fromDefaults;
+    }
+    const hex = WIRE_COLORS[colorKey];
+    if (hex) {
+      return {
+        id: colorKey,
+        label: colorKey.charAt(0).toUpperCase() + colorKey.slice(1),
+        hex: hex,
+      };
+    }
+    return colorOptions[0] || WIRE_COLOR_OPTIONS[0];
+  }
+
+  /**
    * Builds the menu DOM for the current color / delete state.
    */
   function render() {
-    const current =
-      WIRE_COLOR_OPTIONS.find(function (entry) {
-        return entry.id === currentColor;
-      }) || WIRE_COLOR_OPTIONS[0];
+    const current = resolveColorEntry(currentColor);
 
     let html =
       '<div class="wire-menu-row">' +
@@ -76,8 +107,8 @@ export function createWireMenu(mount, handlers) {
     if (colorPickerOpen) {
       html +=
         '<div class="wire-menu-colors" role="group" aria-label="Wire color options">';
-      for (let i = 0; i < WIRE_COLOR_OPTIONS.length; i += 1) {
-        const entry = WIRE_COLOR_OPTIONS[i];
+      for (let i = 0; i < colorOptions.length; i += 1) {
+        const entry = colorOptions[i];
         const selected = entry.id === currentColor;
         html +=
           '<button type="button" class="wire-menu-swatch' +

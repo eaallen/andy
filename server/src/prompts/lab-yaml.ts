@@ -9,6 +9,7 @@ export const COMPONENT_CATALOG = `
 ### power
 - Terminals: l1…lN (hot legs), n (neutral), g (ground)
 - Optional field: legs (number, default 1). legs: 2 adds l2, etc.
+- Optional field: kind (ac|dc, default ac). Icon only — ac = circle+sine, dc = circle+/−.
 
 ### transformer
 - Terminals: pri-l1, pri-n, pri-g, sec-hot, sec-com
@@ -54,6 +55,8 @@ Top-level fields:
 - margin: number (optional, default 40)
 - passMessage: string (optional)
 - hints.demo / hints.lab: strings (optional)
+- defaultWireColor: color key (optional, default black) — starting color for new lab wires
+- wireColors: array of color keys (optional) — colors shown in the wire picker
 - components: array (required)
 - demo.wires: array (optional but preferred when wiring is visible)
 - simulation: object (include when loads/switches are present)
@@ -68,14 +71,20 @@ Each entry:
        keywords: margin, left, top, center, right, bottom
        offsets: center-55, right-140, bottom-128, center+64
   legs: only for power
+  kind: only for power (ac|dc, default ac)
 
 ### Wire endpoints
 Always "componentId.terminalId" (e.g. power.l1, switch1.com, lamp.hot).
-Wire colors: red | gray | blue | green
-  - blue ≈ hot/line often
-  - gray ≈ neutral
+Wire colors: black | white | red | blue | yellow | orange | green | purple | gray
+  - black ≈ hot/line often
+  - white / gray ≈ neutral
   - green ≈ ground
   - red ≈ switched/signal/traveler (use judgment from diagram)
+  - blue / yellow / orange / purple ≈ travelers or distinct circuits
+
+Optional lab wire-picker settings:
+  defaultWireColor: black
+  wireColors: [black, white, red, blue, yellow, orange, green, purple]
 
 demo.wires item shapes:
   - { from: power.l1, to: switch1.com, color: blue }
@@ -94,6 +103,7 @@ loads:
 ### grading
 required: [component ids that must exist]
 continuity: [{ from, to, fail?: message }]  # wires only, no switch bridges
+polarity: [{ load, closed?: [switch ids], fail?: message }]  # labeled hot/neutral; load still lights if reversed
 whenClosed:
   - switch: switch1          # legacy single-switch form
     energize: [lamp]

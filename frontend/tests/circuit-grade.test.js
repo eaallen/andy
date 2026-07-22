@@ -362,6 +362,89 @@ describe("createCircuitSimulator", () => {
     expect(simulator.simulate([]).energized.lamp).toBe(false);
     expect(simulator.simulate(["sw1"]).energized.lamp).toBe(true);
   });
+
+  it("energizes a lamp wired with reversed hot/neutral polarity", () => {
+    const supply = makeComponent("supply", "transformer", [
+      { id: "hot" },
+      { id: "ret" },
+    ]);
+    const lamp = makeComponent("lamp", "lamp", [{ id: "hot" }, { id: "n" }]);
+    const components = { supply: supply, lamp: lamp };
+    // Supply hot → lamp.n, lamp.hot → supply return (reversed labels).
+    const wires = [
+      { from: term(supply, "hot"), to: term(lamp, "n") },
+      { from: term(lamp, "hot"), to: term(supply, "ret") },
+    ];
+    const simulation = {
+      supply: {
+        hot: { component: "supply", terminal: "hot" },
+        return: { component: "supply", terminal: "ret" },
+      },
+      loads: [
+        {
+          id: "lamp",
+          requireHot: { component: "lamp", terminal: "hot" },
+          signal: { component: "lamp", terminal: "n" },
+          feedback: { type: "light" },
+        },
+      ],
+      switches: [],
+    };
+
+    const simulator = createCircuitSimulator(
+      function () {
+        return wires;
+      },
+      function () {
+        return components;
+      },
+      simulation
+    );
+
+    expect(simulator.simulate([]).energized.lamp).toBe(true);
+    expect(simulator.isLoadPolarityCorrect("lamp", [])).toBe(false);
+  });
+
+  it("reports correct polarity when lamp hot reaches supply hot", () => {
+    const supply = makeComponent("supply", "transformer", [
+      { id: "hot" },
+      { id: "ret" },
+    ]);
+    const lamp = makeComponent("lamp", "lamp", [{ id: "hot" }, { id: "n" }]);
+    const components = { supply: supply, lamp: lamp };
+    const wires = [
+      { from: term(supply, "hot"), to: term(lamp, "hot") },
+      { from: term(lamp, "n"), to: term(supply, "ret") },
+    ];
+    const simulation = {
+      supply: {
+        hot: { component: "supply", terminal: "hot" },
+        return: { component: "supply", terminal: "ret" },
+      },
+      loads: [
+        {
+          id: "lamp",
+          requireHot: { component: "lamp", terminal: "hot" },
+          signal: { component: "lamp", terminal: "n" },
+          feedback: { type: "light" },
+        },
+      ],
+      switches: [],
+    };
+
+    const simulator = createCircuitSimulator(
+      function () {
+        return wires;
+      },
+      function () {
+        return components;
+      },
+      simulation
+    );
+
+    expect(simulator.simulate([]).energized.lamp).toBe(true);
+    expect(simulator.isLoadPolarityCorrect("lamp", [])).toBe(true);
+  });
 });
 
 describe("createGrader", () => {
@@ -484,6 +567,66 @@ describe("createGrader", () => {
         return /buttonFront/i.test(msg) && /rear/i.test(msg);
       })
     ).toBe(true);
+  });
+
+  it("fails polarity grading when a lit lamp is reverse-wired", () => {
+    const supply = makeComponent("supply", "transformer", [
+      { id: "hot" },
+      { id: "ret" },
+    ]);
+    const lamp = makeComponent("lamp", "lamp", [{ id: "hot" }, { id: "n" }]);
+    const components = { supply: supply, lamp: lamp };
+    const wires = [
+      { from: term(supply, "hot"), to: term(lamp, "n") },
+      { from: term(lamp, "hot"), to: term(supply, "ret") },
+    ];
+    const simulation = {
+      supply: {
+        hot: { component: "supply", terminal: "hot" },
+        return: { component: "supply", terminal: "ret" },
+      },
+      loads: [
+        {
+          id: "lamp",
+          requireHot: { component: "lamp", terminal: "hot" },
+          signal: { component: "lamp", terminal: "n" },
+          feedback: { type: "light" },
+        },
+      ],
+      switches: [],
+    };
+    const simulator = createCircuitSimulator(
+      function () {
+        return wires;
+      },
+      function () {
+        return components;
+      },
+      simulation
+    );
+    const grader = createGrader(
+      simulator,
+      function () {
+        return components;
+      },
+      {
+        required: ["supply", "lamp"],
+        continuity: [],
+        polarity: [
+          {
+            load: "lamp",
+            closed: [],
+            fail: "Lamp hot and neutral are reversed.",
+          },
+        ],
+        whenClosed: [{ closed: [], energize: ["lamp"] }],
+      }
+    );
+
+    expect(simulator.simulate([]).energized.lamp).toBe(true);
+    const result = grader.grade();
+    expect(result.pass).toBe(false);
+    expect(result.failures).toContain("Lamp hot and neutral are reversed.");
   });
 });
 

@@ -156,7 +156,6 @@ function positionTerminalLabel(text, radius, placement) {
 export function addTerminal(group, x, y, id, label, opts) {
   const options = opts || {};
   const radius = options.radius || 7;
-  const fill = WIRE_COLORS[options.wireColor] || WIRE_COLORS.gray;
   const placement = options.labelPlacement || "right";
   const side = options.side || "top";
   const shellWidth = options.shellWidth || 100;
@@ -182,8 +181,8 @@ export function addTerminal(group, x, y, id, label, opts) {
     x: 0,
     y: 0,
     radius: radius,
-    fill: fill,
-    stroke: "#ffffff",
+    fill: "#ffffff",
+    stroke: "#000000",
     strokeWidth: 2,
     hitStrokeWidth: 20,
     name: "terminal",
@@ -362,21 +361,59 @@ export function addComponentShell(group, width, height, title) {
 }
 
 /**
- * Draws a simple SPST switch symbol (open contacts with actuator).
- * Used as a static decoration (e.g. on the power source).
+ * Draws a schematic voltage-source symbol: AC (circle + sine) or DC (circle +/−).
  * @param {Konva.Group} group - Parent group.
  * @param {number} x - Local x of symbol center.
  * @param {number} y - Local y of symbol center.
- * @param {number} width - Symbol width.
+ * @param {number} [radius] - Circle radius; defaults to 16.
+ * @param {"ac"|"dc"} [kind] - AC (default) or DC marking inside the circle.
  */
-export function addSwitchSymbol(group, x, y, width) {
-  const half = width / 2;
-  const contactY = y + 6;
+export function addPowerSourceSymbol(group, x, y, radius, kind) {
+  const r = radius != null ? radius : 16;
+  const sourceKind = kind === "dc" ? "dc" : "ac";
+  const stroke = "#18181b";
 
   group.add(
+    new Konva.Circle({
+      x: x,
+      y: y,
+      radius: r,
+      stroke: stroke,
+      strokeWidth: 2,
+      fill: "transparent",
+      listening: false,
+    })
+  );
+
+  if (sourceKind === "ac") {
+    const halfW = r * 0.55;
+    const amp = r * 0.28;
+    const samples = 24;
+    const points = [];
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      points.push(x - halfW + t * halfW * 2, y + Math.sin(t * Math.PI * 2) * amp);
+    }
+    group.add(
+      new Konva.Line({
+        points: points,
+        stroke: stroke,
+        strokeWidth: 2,
+        lineCap: "round",
+        lineJoin: "round",
+        listening: false,
+      })
+    );
+    return;
+  }
+
+  const markSize = r * 0.28;
+  const markY = r * 0.38;
+  // Plus at top
+  group.add(
     new Konva.Line({
-      points: [x - half, contactY, x - half + 10, contactY],
-      stroke: "#18181b",
+      points: [x - markSize, y - markY, x + markSize, y - markY],
+      stroke: stroke,
       strokeWidth: 2,
       lineCap: "round",
       listening: false,
@@ -384,17 +421,18 @@ export function addSwitchSymbol(group, x, y, width) {
   );
   group.add(
     new Konva.Line({
-      points: [x + half - 10, contactY, x + half, contactY],
-      stroke: "#18181b",
+      points: [x, y - markY - markSize, x, y - markY + markSize],
+      stroke: stroke,
       strokeWidth: 2,
       lineCap: "round",
       listening: false,
     })
   );
+  // Minus at bottom
   group.add(
     new Konva.Line({
-      points: [x - half + 10, contactY, x + half - 4, contactY - 10],
-      stroke: "#18181b",
+      points: [x - markSize, y + markY, x + markSize, y + markY],
+      stroke: stroke,
       strokeWidth: 2,
       lineCap: "round",
       listening: false,

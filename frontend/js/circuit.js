@@ -339,20 +339,12 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
   }
 
   /**
-   * Simulates the circuit with the given switches closed.
-   * A load is live when its requireHot reaches any supply.hot and its signal
-   * reaches supply.return (wires + closed-switch bridges).
+   * Resolves supply terminals and BFS reachability for the given closed switches.
    * @param {string[]} closedSwitchIds - Closed switch/button component ids.
    */
-  function simulate(closedSwitchIds) {
-    console.log("simulate", closedSwitchIds);
-    const result = {
-      energized: emptyEnergized(),
-      pathKeys: {},
-    };
-
-    if (!simulation || !simulation.supply || !Array.isArray(simulation.loads)) {
-      return result;
+  function supplyReachability(closedSwitchIds) {
+    if (!simulation || !simulation.supply) {
+      return null;
     }
 
     const hotRefs = Array.isArray(simulation.supply.hot)
@@ -369,7 +361,7 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
       }
     }
     if (hotTerminals.length === 0 || !ret) {
-      return result;
+      return null;
     }
 
     const bridges = switchBridgeEdges(closedSwitchIds);
@@ -379,9 +371,62 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
     for (let i = 0; i < hotTerminals.length; i += 1) {
       Object.assign(fromHot, bfs(adjacency, hotTerminals[i]));
     }
-    const fromReturn = bfs(adjacency, ret);
+    return {
+      fromHot: fromHot,
+      fromReturn: bfs(adjacency, ret),
+    };
+  }
 
-    result.pathKeys = Object.assign({}, fromHot);
+  /**
+   * Returns whether a two-terminal load bridges supply hot and return in either
+   * polarity (real-life lamp behavior).
+   * @param {{ [key: string]: boolean }} fromHot - Terminals reachable from supply hot.
+   * @param {{ [key: string]: boolean }} fromReturn - Terminals reachable from supply return.
+   * @param {object} requireHot - Load terminal labeled hot.
+   * @param {object} signal - Load terminal labeled return/neutral.
+   */
+  function loadEnergizedEitherPolarity(fromHot, fromReturn, requireHot, signal) {
+    const aHot = !!fromHot[terminalKey(requireHot)];
+    const bHot = !!fromHot[terminalKey(signal)];
+    const aRet = !!fromReturn[terminalKey(requireHot)];
+    const bRet = !!fromReturn[terminalKey(signal)];
+    return (aHot && bRet) || (bHot && aRet);
+  }
+
+  /**
+   * Returns whether a load is wired in the labeled polarity:
+   * requireHot → supply hot and signal → supply return.
+   * @param {{ [key: string]: boolean }} fromHot - Terminals reachable from supply hot.
+   * @param {{ [key: string]: boolean }} fromReturn - Terminals reachable from supply return.
+   * @param {object} requireHot - Load terminal labeled hot.
+   * @param {object} signal - Load terminal labeled return/neutral.
+   */
+  function loadPolarityCorrect(fromHot, fromReturn, requireHot, signal) {
+    return !!fromHot[terminalKey(requireHot)] && !!fromReturn[terminalKey(signal)];
+  }
+
+  /**
+   * Simulates the circuit with the given switches closed.
+   * A load is live when one terminal reaches supply hot and the other reaches
+   * supply return, in either polarity (wires + closed-switch bridges).
+   * @param {string[]} closedSwitchIds - Closed switch/button component ids.
+   */
+  function simulate(closedSwitchIds) {
+    const result = {
+      energized: emptyEnergized(),
+      pathKeys: {},
+    };
+
+    if (!simulation || !Array.isArray(simulation.loads)) {
+      return result;
+    }
+
+    const reach = supplyReachability(closedSwitchIds || []);
+    if (!reach) {
+      return result;
+    }
+
+    result.pathKeys = Object.assign({}, reach.fromHot);
 
     let anyLoadLive = false;
     for (let i = 0; i < simulation.loads.length; i += 1) {
@@ -391,19 +436,61 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
       if (!requireHot || !signal) {
         continue;
       }
-      const hotOk = !!fromHot[terminalKey(requireHot)];
-      const signalOk = !!fromReturn[terminalKey(signal)];
-      if (hotOk && signalOk) {
+      if (
+        loadEnergizedEitherPolarity(
+          reach.fromHot,
+          reach.fromReturn,
+          requireHot,
+          signal
+        )
+      ) {
         result.energized[load.id] = true;
         anyLoadLive = true;
       }
     }
 
     if (anyLoadLive) {
-      Object.assign(result.pathKeys, fromReturn);
+      Object.assign(result.pathKeys, reach.fromReturn);
     }
 
     return result;
+  }
+
+  /**
+   * Returns whether a simulation load is wired in the labeled hot/neutral polarity.
+   * Visual energize stays polarity-agnostic; use this for grading deductions.
+   * @param {string} loadId - Simulation load id.
+   * @param {string[]} [closedSwitchIds] - Closed switch/button ids for the check.
+   */
+  function isLoadPolarityCorrect(loadId, closedSwitchIds) {
+    if (!simulation || !Array.isArray(simulation.loads)) {
+      return false;
+    }
+    let load = null;
+    for (let i = 0; i < simulation.loads.length; i += 1) {
+      if (simulation.loads[i].id === loadId) {
+        load = simulation.loads[i];
+        break;
+      }
+    }
+    if (!load) {
+      return false;
+    }
+    const requireHot = resolveEndpoint(load.requireHot);
+    const signal = resolveEndpoint(load.signal);
+    if (!requireHot || !signal) {
+      return false;
+    }
+    const reach = supplyReachability(closedSwitchIds || []);
+    if (!reach) {
+      return false;
+    }
+    return loadPolarityCorrect(
+      reach.fromHot,
+      reach.fromReturn,
+      requireHot,
+      signal
+    );
   }
 
   /**
@@ -461,6 +548,7 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
   return {
     simulate: simulate,
     energizeForSwitch: energizeForSwitch,
+    isLoadPolarityCorrect: isLoadPolarityCorrect,
     areWiredTogether: areWiredTogether,
     findTerminalByRole: findTerminalByRole,
     resolveEndpoint: resolveEndpoint,

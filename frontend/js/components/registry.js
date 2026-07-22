@@ -17,7 +17,7 @@ import { makeTransformer } from "./transformer.js";
  */
 export const COMPONENT_REGISTRY = {
   power: function (entry) {
-    return makePower(entry.x, entry.y, { legs: entry.legs });
+    return makePower(entry.x, entry.y, { legs: entry.legs, kind: entry.kind });
   },
   transformer: function (entry) {
     return makeTransformer(entry.x, entry.y);
@@ -62,7 +62,7 @@ export const COMPONENT_REGISTRY = {
 
 /**
  * Creates a single component instance from a normalized YAML component entry.
- * @param {{ id: string, type: string, label?: string, x: number, y: number, legs?: number }} entry - Resolved component.
+ * @param {{ id: string, type: string, label?: string, x: number, y: number, legs?: number, kind?: "ac"|"dc" }} entry - Resolved component.
  */
 export function makeComponentFromEntry(entry) {
   const type = entry.type;
@@ -95,6 +95,7 @@ export function createLayoutFromConfig(config, stageWidth, stageHeight, resolveC
       type: entry.type,
       label: entry.label,
       legs: entry.legs,
+      kind: entry.kind,
       x: resolveCoord(entry.x, "x", stage),
       y: resolveCoord(entry.y, "y", stage),
     };

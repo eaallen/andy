@@ -8,7 +8,8 @@ hints:
     Undo (Ctrl/Cmd+Z) reverses wire edits.
   lab: >-
     Lab: wire so Front has its own path and Rear + Side share the Rear chime.
-    Color matches the terminal you click. Undo reverses edits. Then Check to grade.
+    New wires use the last color you picked (default black). Undo reverses edits.
+    Then Check to grade.
 
 # Positions: numbers, percents ("42%"), or expressions
 # (margin, left, top, center, right, bottom) with optional +/- offset.

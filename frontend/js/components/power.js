@@ -3,7 +3,7 @@ import { COMPONENT_TYPES, TERMINAL_ROLES } from "./constants.js";
 import {
   TERMINAL_OUTSET,
   addComponentShell,
-  addSwitchSymbol,
+  addPowerSourceSymbol,
   addTerminal,
   initComponent,
   nextComponentInstanceId,
@@ -12,18 +12,20 @@ import {
 /**
  * Creates a power source with configurable hot legs plus N and G.
  * Default is one hot leg (L1). Set legs ≥ 2 for multi-wire / multi-phase feeds.
+ * Icon is the schematic AC voltage source (circle + sine) unless kind is "dc".
  * @param {number} x - Group x position on the stage.
  * @param {number} y - Group y position on the stage.
- * @param {{ legs?: number }} [options] - Power options; legs defaults to 1.
+ * @param {{ legs?: number; kind?: "ac"|"dc" }} [options] - Power options; legs defaults to 1, kind to "ac".
  */
 export function makePower(x, y, options) {
   const legs = options && options.legs != null ? options.legs : 1;
+  const kind = options && options.kind === "dc" ? "dc" : "ac";
   const group = new Konva.Group({ x: x, y: y });
   const terminalCount = legs + 2;
   const shellWidth = Math.max(110, terminalCount * 28 + 24);
   const shell = addComponentShell(group, shellWidth, 88, "Power");
 
-  addSwitchSymbol(group, shell.width / 2, 42, 36);
+  addPowerSourceSymbol(group, shell.width / 2, 42, 16, kind);
 
   group.add(
     new Konva.Text({
@@ -75,6 +77,7 @@ export function makePower(x, y, options) {
   );
 
   group.powerLegs = legs;
+  group.powerKind = kind;
   initComponent(group, COMPONENT_TYPES.POWER, nextComponentInstanceId("power"), terminals);
   return group;
 }

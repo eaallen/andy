@@ -128,6 +128,7 @@ describe("COMPONENT_REGISTRY", () => {
       y: 0,
     });
     expect(power.powerLegs).toBe(1);
+    expect(power.powerKind).toBe("ac");
     expect(
       power.terminals.map(function (t) {
         return t.id;
@@ -149,5 +150,16 @@ describe("COMPONENT_REGISTRY", () => {
         return t.id;
       })
     ).toEqual(["l1", "l2", "n", "g"]);
+  });
+
+  it("builds power with dc kind", () => {
+    const power = makeComponentFromEntry({
+      id: "power",
+      type: "power",
+      kind: "dc",
+      x: 0,
+      y: 0,
+    });
+    expect(power.powerKind).toBe("dc");
   });
 });

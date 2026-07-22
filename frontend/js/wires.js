@@ -246,7 +246,7 @@ export function createWireManager(layer, options) {
    */
   function clearPendingHighlight() {
     if (pendingTerminal && pendingTerminal.node) {
-      pendingTerminal.node.stroke("#ffffff");
+      pendingTerminal.node.stroke("#000000");
       pendingTerminal.node.strokeWidth(2);
     }
     pendingTerminal = null;

@@ -2,7 +2,7 @@
  * Grades a student circuit from normalized config.grading rules.
  * @param {object} simulator - Circuit simulator from createCircuitSimulator.
  * @param {() => object} getComponents - Returns the current component map (config id → group).
- * @param {object|null} grading - Normalized config.grading (required, continuity, whenClosed).
+ * @param {object|null} grading - Normalized config.grading (required, continuity, polarity, whenClosed).
  */
 export function createGrader(simulator, getComponents, grading) {
   /**
@@ -71,6 +71,24 @@ export function createGrader(simulator, getComponents, grading) {
       const from = simulator.resolveEndpoint(check.from);
       const to = simulator.resolveEndpoint(check.to);
       if (!simulator.areWiredTogether(from, to)) {
+        failures.push(check.fail);
+      }
+    }
+    return failures;
+  }
+
+  /**
+   * Runs labeled hot/neutral polarity checks from config.grading.polarity.
+   * Loads may still light when reversed; this is a best-practice deduction.
+   */
+  function checkPolarity() {
+    const failures = [];
+    if (!grading || !Array.isArray(grading.polarity)) {
+      return failures;
+    }
+    for (let i = 0; i < grading.polarity.length; i += 1) {
+      const check = grading.polarity[i];
+      if (!simulator.isLoadPolarityCorrect(check.load, check.closed)) {
         failures.push(check.fail);
       }
     }
@@ -151,6 +169,11 @@ export function createGrader(simulator, getComponents, grading) {
       failures.push(continuityFailures[i]);
     }
 
+    const polarityFailures = checkPolarity();
+    for (let p = 0; p < polarityFailures.length; p += 1) {
+      failures.push(polarityFailures[p]);
+    }
+
     const whenClosed = Array.isArray(grading.whenClosed) ? grading.whenClosed : [];
     for (let j = 0; j < whenClosed.length; j += 1) {
       const check = checkWhenClosed(whenClosed[j]);
@@ -169,6 +192,7 @@ export function createGrader(simulator, getComponents, grading) {
     grade: grade,
     checkComponentsPresent: checkComponentsPresent,
     checkContinuity: checkContinuity,
+    checkPolarity: checkPolarity,
     checkWhenClosed: checkWhenClosed,
   };
 }

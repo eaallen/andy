@@ -124,6 +124,43 @@ describe("lab config parsing", () => {
       { component: "power", terminal: "l2" },
     ]);
     expect(config.grading.whenClosed[0].energize).toEqual(["lampA", "lampB"]);
+    expect(config.grading.polarity).toEqual([
+      {
+        load: "lampA",
+        closed: [],
+        fail: "Lamp A hot and neutral are reversed.",
+      },
+      {
+        load: "lampB",
+        closed: [],
+        fail: "Lamp B hot and neutral are reversed.",
+      },
+    ]);
+  });
+
+  it("normalizes grading.polarity with closed switches", () => {
+    const config = normalizeLabConfig({
+      components: [
+        { id: "power", type: "power", x: 0, y: 0 },
+        { id: "switch1", type: "switch", x: 0, y: 0 },
+        { id: "lamp", type: "lamp", x: 0, y: 0 },
+      ],
+      simulation: {
+        supply: { hot: "power.l1", return: "power.n" },
+        loads: [{ id: "lamp", requireHot: "lamp.hot", signal: "lamp.n" }],
+      },
+      grading: {
+        polarity: [{ load: "lamp", closed: ["switch1"] }],
+      },
+    });
+
+    expect(config.grading.polarity).toEqual([
+      {
+        load: "lamp",
+        closed: ["switch1"],
+        fail: 'Load "lamp" hot and neutral are reversed.',
+      },
+    ]);
   });
 
   it("defaults power legs to 1 and rejects invalid legs", () => {
@@ -145,6 +182,30 @@ describe("lab config parsing", () => {
     ).toThrow(/only type "power" supports legs/i);
   });
 
+  it("defaults power kind to ac and rejects invalid kind", () => {
+    const ac = normalizeLabConfig({
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+    });
+    expect(ac.components[0].kind).toBe("ac");
+
+    const dc = normalizeLabConfig({
+      components: [{ id: "power", type: "power", kind: "dc", x: 0, y: 0 }],
+    });
+    expect(dc.components[0].kind).toBe("dc");
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", kind: "battery", x: 0, y: 0 }],
+      })
+    ).toThrow(/kind must be "ac" or "dc"/i);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "lamp", type: "lamp", kind: "dc", x: 0, y: 0 }],
+      })
+    ).toThrow(/only type "power" supports kind/i);
+  });
+
   it("rejects demo wires that reference unknown components", () => {
     const raw = {
       components: [{ id: "power", type: "power", x: 0, y: 0 }],
@@ -154,6 +215,75 @@ describe("lab config parsing", () => {
     };
 
     expect(() => normalizeLabConfig(raw)).toThrow(/unknown component/i);
+  });
+
+  it("defaults wire color settings to black and the full picker palette", () => {
+    const config = normalizeLabConfig({
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+    });
+
+    expect(config.defaultWireColor).toBe("black");
+    expect(config.wireColors).toEqual([
+      "black",
+      "white",
+      "red",
+      "blue",
+      "yellow",
+      "orange",
+      "green",
+      "purple",
+    ]);
+    expect(config.wireColorOptions[0]).toMatchObject({
+      id: "black",
+      hex: expect.any(String),
+    });
+  });
+
+  it("normalizes custom defaultWireColor and wireColors", () => {
+    const config = normalizeLabConfig({
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+      defaultWireColor: "red",
+      wireColors: ["red", "blue", "green"],
+    });
+
+    expect(config.defaultWireColor).toBe("red");
+    expect(config.wireColors).toEqual(["red", "blue", "green"]);
+    expect(config.wireColorOptions.map((entry) => entry.id)).toEqual([
+      "red",
+      "blue",
+      "green",
+    ]);
+  });
+
+  it("rejects unknown or inconsistent wire color settings", () => {
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", x: 0, y: 0 }],
+        defaultWireColor: "magenta",
+      })
+    ).toThrow(/defaultWireColor/i);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", x: 0, y: 0 }],
+        wireColors: ["red", "neon"],
+      })
+    ).toThrow(/wireColors\[1\]/i);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", x: 0, y: 0 }],
+        defaultWireColor: "blue",
+        wireColors: ["red", "green"],
+      })
+    ).toThrow(/must also appear in wireColors/i);
+
+    expect(() =>
+      normalizeLabConfig({
+        components: [{ id: "power", type: "power", x: 0, y: 0 }],
+        wireColors: [],
+      })
+    ).toThrow(/non-empty array/i);
   });
 });
 

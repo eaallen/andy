@@ -22,6 +22,8 @@ Top-level fields:
 | `margin` | no | Stage margin in px (default applied by loader) |
 | `passMessage` | no | Message when Check passes |
 | `hints.demo` / `hints.lab` | no | Mode hint text |
+| `defaultWireColor` | no | Starting / remembered wire color for new wires (default `black`) |
+| `wireColors` | no | Colors shown in the wire picker (default: full palette) |
 | `components` | yes | Layout entries (see below) |
 | `demo.wires` | no | Pre-wires for Demo mode; Lab mode starts empty |
 | `simulation` | no\* | Continuity / energization model |
@@ -58,11 +60,20 @@ demo:
     # or short form: [power.l1, switch1.com, blue]
 ```
 
-Wire colors: `red`, `gray`, `blue`, `green`.
+Demo wire colors (and picker keys): `black`, `white`, `red`, `blue`, `yellow`, `orange`, `green`, `purple`, plus legacy `gray`.
+
+Lab mode remembers the last color the student picks for all new wires (it does **not** auto-match the terminal). Configure the starting color and picker list:
+
+```yaml
+defaultWireColor: black
+wireColors: [black, white, red, blue, yellow, orange, green, purple]
+```
+
+Omit both fields to use the defaults above. `defaultWireColor` must be one of the keys in `wireColors` (or the default palette when `wireColors` is omitted).
 
 ### Simulation
 
-A load is energized when `requireHot` can reach `supply.hot` **and** `signal` can reach `supply.return`, through wires plus closed-switch bridges.
+A load is energized when one of its terminals can reach `supply.hot` **and** the other can reach `supply.return`, through wires plus closed-switch bridges — **either polarity lights the load** (like a real lamp). Use `grading.polarity` (or terminal-specific `continuity`) to require labeled hot/neutral orientation.
 
 ```yaml
 simulation:
@@ -109,6 +120,10 @@ grading:
     - from: power.l1
       to: switch1.com
       fail: "Power L1 is not wired to the switch COM."
+  polarity:                    # labeled orientation; load may still light if reversed
+    - load: lamp
+      closed: [switch1]        # optional; switches closed for the check (default [])
+      fail: "Lamp hot and neutral are reversed."
   whenClosed:                  # close named switch(es); exactly these loads must be live
     - switch: switch1          # legacy single-switch form
       energize: [lamp]
@@ -119,20 +134,20 @@ grading:
     #   energize: []
 ```
 
-`whenClosed` requires a `simulation` block so `energize` ids can be validated. Use `closed: []` when loads should be live with no switches thrown (GFCI, multi-wire).
-
+`whenClosed` requires a `simulation` block so `energize` ids can be validated. Use `closed: []` when loads should be live with no switches thrown (GFCI, multi-wire). `polarity` checks that `requireHot` reaches supply hot and `signal` reaches supply return (oriented); visual energize stays polarity-agnostic.
 ## Built-in component catalog
 
 Factories live under `js/components/` (`COMPONENT_REGISTRY` in `registry.js`). Use these `type` strings in lab files.
 
 ### `power`
 
-120V supply by default (`l1`, `n`, `g`). Set `legs` to add more hot terminals (`l2`, `l3`, …) for multi-wire / multi-phase feeds.
+120V AC supply by default (`l1`, `n`, `g`). Set `legs` to add more hot terminals (`l2`, `l3`, …) for multi-wire / multi-phase feeds. Set `kind: dc` for the DC voltage-source icon (circle with +/−); default `kind: ac` is the circle with a sine wave.
 
 ```yaml
 - id: power
   type: power
   legs: 2          # optional; default 1 → terminals l1, n, g
+  kind: ac         # optional; ac (default) or dc
 ```
 
 | Terminal id | Label | Typical role |

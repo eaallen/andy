@@ -54,6 +54,10 @@ grading:
     - from: lamp.n
       to: power.n
       fail: "Lamp neutral is not wired to power neutral."
+  polarity:
+    - load: lamp
+      closed: [switch1]
+      fail: "Lamp hot and neutral are reversed."
   whenClosed:
     - switch: switch1
       energize: [lamp]

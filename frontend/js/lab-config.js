@@ -1,11 +1,19 @@
 import yaml from "js-yaml";
+import {
+  DEFAULT_WIRE_COLOR,
+  WIRE_COLOR_OPTIONS,
+  WIRE_COLORS,
+  wireColorOptionsFor,
+} from "./components/constants.js";
 
 /**
  * Reads and normalizes a circuit-lab YAML or JSON definition into a runtime config.
  *
  * Lab file fields (YAML or JSON — both parsed with js-yaml):
  *   title, margin, hints.{demo,lab}, passMessage
- *   components[]: { id, type, label?, x, y, legs? } — legs only for power (default 1)
+ *   defaultWireColor?: color key (default black) — last-selected color starts here
+ *   wireColors?: [color keys] — colors available in the wire picker
+ *   components[]: { id, type, label?, x, y, legs?, kind? } — legs/kind only for power (defaults 1 / ac)
  *   demo.wires[]: { from, to, color? } or [from, to, color?]
  *     Endpoints are "componentId.terminalId".
  *   simulation (optional until the lab defines it):
@@ -15,6 +23,7 @@ import yaml from "js-yaml";
  *   grading (optional until the lab defines it):
  *     required[]: component ids that must be present
  *     continuity[]: { from, to, fail? }
+ *     polarity[]: { load, closed?: [ids], fail? } — labeled hot/neutral orientation
  *     whenClosed[]: { switch?, closed?: [ids], energize: [loadId, ...] }
  *
  * Built-in component types (factories live under components/):
@@ -186,6 +195,74 @@ function parseAndAssertEndpoint(endpoint, componentById, context) {
 }
 
 /**
+ * Normalizes defaultWireColor and wireColors into runtime picker settings.
+ * @param {object} raw - Raw lab definition object.
+ */
+function normalizeWireColorSettings(raw) {
+  const defaultIds = WIRE_COLOR_OPTIONS.map(function (entry) {
+    return entry.id;
+  });
+  let colorIds = defaultIds;
+
+  if (raw.wireColors != null) {
+    if (!Array.isArray(raw.wireColors) || raw.wireColors.length === 0) {
+      throw labConfigError(
+        "wireColors must be a non-empty array of color keys (e.g. black, red, blue)."
+      );
+    }
+    colorIds = [];
+    for (let i = 0; i < raw.wireColors.length; i += 1) {
+      const key = String(raw.wireColors[i] || "").trim();
+      if (!key) {
+        throw labConfigError("wireColors[" + i + "] must be a non-empty color key.");
+      }
+      if (!WIRE_COLORS[key]) {
+        throw labConfigError(
+          'wireColors[' +
+            i +
+            '] unknown color "' +
+            key +
+            '". Known: ' +
+            Object.keys(WIRE_COLORS).join(", ") +
+            "."
+        );
+      }
+      if (colorIds.indexOf(key) === -1) {
+        colorIds.push(key);
+      }
+    }
+  }
+
+  const defaultColor =
+    raw.defaultWireColor != null
+      ? String(raw.defaultWireColor).trim()
+      : DEFAULT_WIRE_COLOR;
+
+  if (!WIRE_COLORS[defaultColor]) {
+    throw labConfigError(
+      'defaultWireColor unknown color "' +
+        defaultColor +
+        '". Known: ' +
+        Object.keys(WIRE_COLORS).join(", ") +
+        "."
+    );
+  }
+  if (colorIds.indexOf(defaultColor) === -1) {
+    throw labConfigError(
+      'defaultWireColor "' +
+        defaultColor +
+        '" must also appear in wireColors.'
+    );
+  }
+
+  return {
+    defaultWireColor: defaultColor,
+    wireColors: colorIds,
+    wireColorOptions: wireColorOptionsFor(colorIds),
+  };
+}
+
+/**
  * Normalizes a demo wire entry from YAML/JSON into { from, to, color }.
  * @param {object|Array} entry - Wire row.
  * @param {number} index - Row index for error messages.
@@ -252,6 +329,17 @@ function normalizeComponent(entry, index) {
     }
   }
 
+  if (entry.kind != null || type === "power") {
+    const kind = normalizePowerKind(entry.kind, entry.id);
+    if (type === "power") {
+      normalized.kind = kind;
+    } else if (entry.kind != null) {
+      throw labConfigError(
+        'Component "' + entry.id + '" has kind, but only type "power" supports kind (ac|dc).'
+      );
+    }
+  }
+
   return normalized;
 }
 
@@ -275,6 +363,28 @@ function normalizePowerLegs(rawLegs, componentId) {
     );
   }
   return legs;
+}
+
+/**
+ * Normalizes power source kind for the schematic icon. Default is "ac".
+ * @param {unknown} rawKind - Raw kind value from YAML ("ac" or "dc").
+ * @param {string} componentId - Component id for error messages.
+ */
+function normalizePowerKind(rawKind, componentId) {
+  if (rawKind == null || rawKind === "") {
+    return "ac";
+  }
+  const kind = String(rawKind).toLowerCase();
+  if (kind !== "ac" && kind !== "dc") {
+    throw labConfigError(
+      'Component "' +
+        componentId +
+        '" kind must be "ac" or "dc" (got ' +
+        String(rawKind) +
+        ")."
+    );
+  }
+  return kind;
 }
 
 /**
@@ -479,6 +589,56 @@ function normalizeContinuityCheck(entry, index, componentById) {
 }
 
 /**
+ * Normalizes one grading polarity check for a simulation load.
+ * @param {object} entry - Raw polarity row.
+ * @param {number} index - Row index for error messages.
+ * @param {{ [id: string]: object }} componentById - Map of declared components.
+ * @param {{ [id: string]: boolean }|null} loadIds - Known simulation load ids, or null if no simulation.
+ */
+function normalizePolarityCheck(entry, index, componentById, loadIds) {
+  const context = "grading.polarity[" + index + "]";
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw labConfigError(context + " must be an object with load and optional closed/fail.");
+  }
+  if (entry.load == null) {
+    throw labConfigError(context + ' needs load: a simulation load id (e.g. "lamp").');
+  }
+  const loadId = String(entry.load);
+  if (!loadIds || !loadIds[loadId]) {
+    const known = loadIds ? Object.keys(loadIds).join(", ") || "(none)" : "(no simulation.loads)";
+    throw labConfigError(
+      context + '.load references unknown load "' + loadId + '". simulation.loads ids: ' + known + "."
+    );
+  }
+
+  /** @type {string[]} */
+  let closed = [];
+  if (entry.closed != null) {
+    if (!Array.isArray(entry.closed)) {
+      throw labConfigError(context + ".closed must be an array of component ids.");
+    }
+    closed = entry.closed.map(function (id, closedIndex) {
+      const componentId = String(id);
+      assertKnownComponent(
+        componentId,
+        componentById,
+        context + ".closed[" + closedIndex + "]"
+      );
+      return componentId;
+    });
+  }
+
+  return {
+    load: loadId,
+    closed: closed,
+    fail:
+      entry.fail != null
+        ? String(entry.fail)
+        : 'Load "' + loadId + '" hot and neutral are reversed.',
+  };
+}
+
+/**
  * Normalizes one whenClosed grading rule.
  * Accepts `switch: id` (legacy single) and/or `closed: [ids]` (multi-switch / all-open).
  * @param {object} entry - Raw whenClosed row.
@@ -567,7 +727,9 @@ function normalizeGrading(raw, componentById, loadIds) {
     return null;
   }
   if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw labConfigError("grading must be an object with required, continuity, and/or whenClosed.");
+    throw labConfigError(
+      "grading must be an object with required, continuity, polarity, and/or whenClosed."
+    );
   }
 
   const requiredRaw = Array.isArray(raw.required) ? raw.required : [];
@@ -583,21 +745,28 @@ function normalizeGrading(raw, componentById, loadIds) {
       })
     : [];
 
+  const polarity = Array.isArray(raw.polarity)
+    ? raw.polarity.map(function (entry, index) {
+        return normalizePolarityCheck(entry, index, componentById, loadIds);
+      })
+    : [];
+
   const whenClosed = Array.isArray(raw.whenClosed)
     ? raw.whenClosed.map(function (entry, index) {
         return normalizeWhenClosed(entry, index, componentById, loadIds);
       })
     : [];
 
-  if (whenClosed.length > 0 && !loadIds) {
+  if ((whenClosed.length > 0 || polarity.length > 0) && !loadIds) {
     throw labConfigError(
-      "grading.whenClosed requires a simulation block with loads so energize ids can be checked."
+      "grading.whenClosed and grading.polarity require a simulation block with loads."
     );
   }
 
   return {
     required: required,
     continuity: continuity,
+    polarity: polarity,
     whenClosed: whenClosed,
   };
 }
@@ -633,6 +802,7 @@ export function normalizeLabConfig(raw) {
   }
 
   const grading = normalizeGrading(raw.grading, componentById, loadIds);
+  const wireColorSettings = normalizeWireColorSettings(raw);
 
   return {
     title: raw.title ? String(raw.title) : "Circuit Lab",
@@ -643,6 +813,9 @@ export function normalizeLabConfig(raw) {
     },
     components: components,
     demoWires: wires,
+    defaultWireColor: wireColorSettings.defaultWireColor,
+    wireColors: wireColorSettings.wireColors,
+    wireColorOptions: wireColorSettings.wireColorOptions,
     passMessage: raw.passMessage
       ? String(raw.passMessage)
       : "Pass — circuit matches the expected wiring.",

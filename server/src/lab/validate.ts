@@ -219,7 +219,7 @@ export function validateLabYaml(rawYaml: string): ValidatedLab {
     if (wire.color && !WIRE_COLORS.has(wire.color)) {
       issues.push({
         level: "warning",
-        message: `Unusual wire color "${wire.color}" at demo.wires[${index}] (expected red|gray|blue|green)`,
+        message: `Unusual wire color "${wire.color}" at demo.wires[${index}] (expected black|white|red|blue|yellow|orange|green|purple|gray)`,
       });
     }
   }
