@@ -37,9 +37,6 @@ export function Module({
         stroke={stroke}
         strokeWidth={2}
         cornerRadius={8}
-        shadowColor="rgba(37, 99, 235, 0.12)"
-        shadowBlur={10}
-        shadowOffsetY={2}
       />
       <Text
         x={10}

@@ -287,6 +287,10 @@ export function App() {
               />
               <Switch />
               <Module width={100} height={100} title="Switch"></Module>
+              {/* stress testing */}
+              {Array.from({ length: 10000 }).map((_, index) => (
+                <Module key={index} width={100} height={100} x={index * 10} y={index * 10} title={`Module ${index}`} />
+              ))}
             </Layer>
           </Stage>
         ) : null}
