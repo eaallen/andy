@@ -4,6 +4,7 @@ import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { Layer, Line, Stage } from "react-konva";
+import { AppCtxProvider } from "./appCtx";
 import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
 import { Switch, SWITCH_SIZE } from "./comps/Switch";
 import { Module } from "./comps/Module";
@@ -271,14 +272,9 @@ type LabLayerProps = {
   positions: Record<ModuleId, Point>;
   wires: Wire[];
   draft: WireDraft | null;
-  pendingTerminalId: string | null;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
-  onTerminalPointerDown: (
-    terminalId: string,
-    e: KonvaEventObject<MouseEvent | TouchEvent>,
-  ) => void;
   onContentBoundsChange: () => void;
 };
 
@@ -291,11 +287,9 @@ const LabLayer = memo(function LabLayer({
   positions,
   wires,
   draft,
-  pendingTerminalId,
   onPressedChange,
   onModuleDragMove,
   onModuleDragEnd,
-  onTerminalPointerDown,
   onContentBoundsChange,
 }: LabLayerProps) {
   const wirePoints = wires
@@ -343,11 +337,9 @@ const LabLayer = memo(function LabLayer({
         y={positions.front.y}
         title="Front"
         pressed={pressed.front}
-        pendingTerminalId={pendingTerminalId}
         onPressedChange={onPressedChange}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
-        onTerminalPointerDown={onTerminalPointerDown}
       />
       <DoorbellButton
         id="rear"
@@ -355,20 +347,16 @@ const LabLayer = memo(function LabLayer({
         y={positions.rear.y}
         title="Rear"
         pressed={pressed.rear}
-        pendingTerminalId={pendingTerminalId}
         onPressedChange={onPressedChange}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
-        onTerminalPointerDown={onTerminalPointerDown}
       />
       <Switch
         id="switch"
         x={positions.switch.x}
         y={positions.switch.y}
-        pendingTerminalId={pendingTerminalId}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
-        onTerminalPointerDown={onTerminalPointerDown}
       />
       <Module
         id="extra"
@@ -377,10 +365,8 @@ const LabLayer = memo(function LabLayer({
         width={100}
         height={100}
         title="Switch"
-        pendingTerminalId={pendingTerminalId}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
-        onTerminalPointerDown={onTerminalPointerDown}
       />
     </Layer>
   );
@@ -417,6 +403,7 @@ export function App() {
 
   const pendingTerminalId =
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
+  const wireMode = draft !== null;
 
   /**
    * Reads live module positions from the stage and updates pan limits.
@@ -624,6 +611,15 @@ export function App() {
     [connectTerminals],
   );
 
+  const appCtx = useMemo(
+    () => ({
+      wireMode,
+      pendingTerminalId,
+      onTerminalPointerDown: handleTerminalPointerDown,
+    }),
+    [wireMode, pendingTerminalId, handleTerminalPointerDown],
+  );
+
   /**
    * Clears pending wire selection when clicking empty stage space.
    */
@@ -732,31 +728,31 @@ export function App() {
       </header>
       <div className="stage-wrap" ref={wrapRef}>
         {size.width > 0 && size.height > 0 ? (
-          <Stage
-            ref={stageRef}
-            width={size.width}
-            height={size.height}
-            scaleX={view.scale}
-            scaleY={view.scale}
-            x={view.x}
-            y={view.y}
-            onWheel={handleWheel}
-            onClick={handleStageClick}
-            onTap={handleStageClick}
-          >
-            <LabLayer
-              pressed={pressed}
-              positions={positions}
-              wires={wires}
-              draft={draft}
-              pendingTerminalId={pendingTerminalId}
-              onPressedChange={setButtonPressed}
-              onModuleDragMove={handleModuleDragMove}
-              onModuleDragEnd={handleModuleDragEnd}
-              onTerminalPointerDown={handleTerminalPointerDown}
-              onContentBoundsChange={syncContentBounds}
-            />
-          </Stage>
+          <AppCtxProvider value={appCtx}>
+            <Stage
+              ref={stageRef}
+              width={size.width}
+              height={size.height}
+              scaleX={view.scale}
+              scaleY={view.scale}
+              x={view.x}
+              y={view.y}
+              onWheel={handleWheel}
+              onClick={handleStageClick}
+              onTap={handleStageClick}
+            >
+              <LabLayer
+                pressed={pressed}
+                positions={positions}
+                wires={wires}
+                draft={draft}
+                onPressedChange={setButtonPressed}
+                onModuleDragMove={handleModuleDragMove}
+                onModuleDragEnd={handleModuleDragEnd}
+                onContentBoundsChange={syncContentBounds}
+              />
+            </Stage>
+          </AppCtxProvider>
         ) : null}
       </div>
     </div>

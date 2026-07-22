@@ -1,4 +1,3 @@
-import type { KonvaEventObject } from "konva/lib/Node";
 import { Module } from "./Module";
 
 const WIDTH = 160;
@@ -9,13 +8,8 @@ type SwitchProps = {
   x?: number;
   y?: number;
   title?: string;
-  pendingTerminalId?: string | null;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd?: (id: string, x: number, y: number) => void;
-  onTerminalPointerDown?: (
-    terminalId: string,
-    e: KonvaEventObject<MouseEvent | TouchEvent>,
-  ) => void;
 };
 
 /**
@@ -26,10 +20,8 @@ export function Switch({
   x = 0,
   y = 0,
   title = "Switch",
-  pendingTerminalId = null,
   onDragMove,
   onDragEnd,
-  onTerminalPointerDown,
 }: SwitchProps) {
   return (
     <Module
@@ -39,10 +31,8 @@ export function Switch({
       width={WIDTH}
       height={HEIGHT}
       title={title}
-      pendingTerminalId={pendingTerminalId}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
-      onTerminalPointerDown={onTerminalPointerDown}
     />
   );
 }
