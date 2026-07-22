@@ -7,6 +7,7 @@ import {
   TERMINAL_RADIUS,
   listTerminals,
   terminalKey,
+  terminalLabelOffset,
   type TerminalCounts,
 } from "./terminals";
 
@@ -26,8 +27,9 @@ type ModuleProps = {
    */
   bodyPointer?: boolean;
   /**
-   * How many connection nodes to place on each edge.
-   * Omitted sides get none; defaults to one on every side.
+   * Connection nodes per edge: a count, or labeled slots
+   * (e.g. `{ top: ["L1", "N", "G"] }`). Omitted sides get none;
+   * defaults to one on every side.
    */
   terminals?: TerminalCounts;
   onDragMove?: (id: string, x: number, y: number) => void;
@@ -92,32 +94,51 @@ export function Module({
         listening={false}
       />
       {children}
-      {sides.map(({ side, index, x: tx, y: ty }) => {
+      {sides.map(({ side, index, x: tx, y: ty, label }) => {
         const tid = terminalKey(id, side, index);
         const isPending = pendingTerminalId === tid;
         const lit = wireMode || isPending;
+        const labelPos = label ? terminalLabelOffset(side) : null;
         return (
-          <Circle
-            key={tid}
-            x={tx}
-            y={ty}
-            radius={TERMINAL_RADIUS}
-            fill={isPending ? "#93c5fd" : lit ? "#dbeafe" : "#f8fafc"}
-            stroke={isPending ? "#1d4ed8" : lit ? "#3b82f6" : "#475569"}
-            strokeWidth={isPending ? 3 : lit ? 2.5 : 2}
-            hitStrokeWidth={12}
-            name={`terminal-${tid}`}
-            id={tid}
-            {...clickCursor}
-            onMouseDown={(e) => {
-              e.cancelBubble = true;
-              onTerminalPointerDown(tid, e);
-            }}
-            onTouchStart={(e) => {
-              e.cancelBubble = true;
-              onTerminalPointerDown(tid, e);
-            }}
-          />
+          <Group key={tid}>
+            {label && labelPos ? (
+              <Text
+                x={tx + labelPos.x}
+                y={ty + labelPos.y}
+                text={label}
+                fontSize={10}
+                fontFamily="system-ui, Arial, sans-serif"
+                fontStyle="bold"
+                fill="#334155"
+                align="center"
+                verticalAlign="middle"
+                width={28}
+                offsetX={14}
+                offsetY={6}
+                listening={false}
+              />
+            ) : null}
+            <Circle
+              x={tx}
+              y={ty}
+              radius={TERMINAL_RADIUS}
+              fill={isPending ? "#93c5fd" : lit ? "#dbeafe" : "#f8fafc"}
+              stroke={isPending ? "#1d4ed8" : lit ? "#3b82f6" : "#475569"}
+              strokeWidth={isPending ? 3 : lit ? 2.5 : 2}
+              hitStrokeWidth={12}
+              name={`terminal-${tid}`}
+              id={tid}
+              {...clickCursor}
+              onMouseDown={(e) => {
+                e.cancelBubble = true;
+                onTerminalPointerDown(tid, e);
+              }}
+              onTouchStart={(e) => {
+                e.cancelBubble = true;
+                onTerminalPointerDown(tid, e);
+              }}
+            />
+          </Group>
         );
       })}
     </Group>

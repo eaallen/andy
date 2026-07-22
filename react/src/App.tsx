@@ -6,8 +6,9 @@ import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { Circle, Layer, Line, Stage } from "react-konva";
 import { AppCtxProvider } from "./appCtx";
 import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
+import { Lamp, LAMP_SIZE, LAMP_TERMINALS } from "./comps/Lamp";
+import { Power, POWER_SIZE, POWER_TERMINALS } from "./comps/Power";
 import { Switch, SWITCH_SIZE } from "./comps/Switch";
-import { Module } from "./comps/Module";
 import {
   pointerCursorHandlers,
   setStageCursor,
@@ -17,6 +18,7 @@ import {
   DEFAULT_TERMINALS,
   listTerminals,
   parseTerminalKey,
+  terminalKey,
   wirePairKey,
   worldTerminalPos,
   type Point,
@@ -26,6 +28,7 @@ import {
   WIRE_TENSION,
   wireSegmentMidpoints,
 } from "./comps/wirePath";
+import { isLoadEnergized } from "./circuit/energize";
 import {
   bridgeEdgesForClosed,
   buildAdjacency,
@@ -55,7 +58,7 @@ const WIRE_UNDERSTROKE_PAD = 5;
 const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
 
 type ButtonId = "front" | "rear";
-type ModuleId = ButtonId | "switch" | "extra";
+type ModuleId = ButtonId | "switch" | "power" | "lamp";
 
 type PressedState = Record<ButtonId, boolean>;
 
@@ -416,8 +419,9 @@ const INITIAL_VIEW: ViewState = { scale: 1, x: 0, y: 0 };
 const INITIAL_POSITIONS: Record<ModuleId, Point> = {
   front: { x: 120, y: 160 },
   rear: { x: 420, y: 160 },
-  switch: { x: 0, y: 0 },
-  extra: { x: 280, y: 40 },
+  switch: { x: 520, y: 40 },
+  power: { x: 40, y: 40 },
+  lamp: { x: 280, y: 40 },
 };
 
 const MODULE_LAYOUTS: Record<ModuleId, ModuleLayout> = {
@@ -436,12 +440,29 @@ const MODULE_LAYOUTS: Record<ModuleId, ModuleLayout> = {
     height: SWITCH_SIZE.height,
     terminals: DEFAULT_TERMINALS,
   },
-  extra: {
-    width: 100,
-    height: 100,
-    terminals: DEFAULT_TERMINALS,
+  power: {
+    width: POWER_SIZE.width,
+    height: POWER_SIZE.height,
+    terminals: { top: 3 },
+  },
+  lamp: {
+    width: LAMP_SIZE.width,
+    height: LAMP_SIZE.height,
+    terminals: { bottom: 2 },
   },
 };
+
+/** Supply terminals for the on-stage power module. */
+const LAB_SUPPLY = {
+  hot: [terminalKey("power", "top", POWER_TERMINALS.hot)],
+  return: terminalKey("power", "top", POWER_TERMINALS.neutral),
+} as const;
+
+/** Lamp load endpoints (hot + neutral). */
+const LAB_LAMP_LOAD = {
+  requireHot: terminalKey("lamp", "bottom", LAMP_TERMINALS.hot),
+  signal: terminalKey("lamp", "bottom", LAMP_TERMINALS.neutral),
+} as const;
 
 /**
  * Clamps a number into [min, max], centering when the range is empty.
@@ -682,6 +703,7 @@ type LabLayerProps = {
   wires: Wire[];
   selectedWireId: string | null;
   draft: WireDraft | null;
+  lampLit: boolean;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
@@ -713,6 +735,7 @@ const LabLayer = memo(function LabLayer({
   wires,
   selectedWireId,
   draft,
+  lampLit,
   onPressedChange,
   onModuleDragMove,
   onModuleDragEnd,
@@ -918,13 +941,18 @@ const LabLayer = memo(function LabLayer({
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
       />
-      <Module
-        id="extra"
-        x={positions.extra.x}
-        y={positions.extra.y}
-        width={100}
-        height={100}
-        title="Switch"
+      <Power
+        id="power"
+        x={positions.power.x}
+        y={positions.power.y}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+      />
+      <Lamp
+        id="lamp"
+        x={positions.lamp.x}
+        y={positions.lamp.y}
+        lit={lampLit}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
       />
@@ -991,6 +1019,11 @@ export function App() {
       ...bridgeEdgesForClosed(closedIds, LAB_BRIDGES),
     ]);
   }, [wires, pressed]);
+
+  const lampLit = useMemo(
+    () => isLoadEnergized(adjacency, LAB_SUPPLY, LAB_LAMP_LOAD),
+    [adjacency],
+  );
 
   /**
    * Reads live module positions from the stage and updates pan limits.
@@ -1065,12 +1098,13 @@ export function App() {
       .filter(([, isDown]) => isDown)
       .map(([id]) => id);
     if (active.length > 0) return `Pressed: ${active.join(", ")}`;
+    if (lampLit) return "Lamp is lit";
     if (wires.length > 0) {
       const nodes = adjacency.size;
       return `${wires.length} wire${wires.length === 1 ? "" : "s"} · ${nodes} connected terminal${nodes === 1 ? "" : "s"}`;
     }
     return "Idle — drag or click terminals to wire";
-  }, [adjacency, draft, pressed, selectedWireId, wires.length]);
+  }, [adjacency, draft, lampLit, pressed, selectedWireId, wires.length]);
 
   /**
    * Updates one button's pressed flag.
@@ -1682,6 +1716,7 @@ export function App() {
                 wires={wires}
                 selectedWireId={selectedWireId}
                 draft={draft}
+                lampLit={lampLit}
                 onPressedChange={setButtonPressed}
                 onModuleDragMove={handleModuleDragMove}
                 onModuleDragEnd={handleModuleDragEnd}

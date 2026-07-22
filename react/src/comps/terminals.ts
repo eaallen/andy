@@ -4,7 +4,13 @@ export const TERMINAL_RADIUS = 7;
 
 export type TerminalSide = "top" | "right" | "bottom" | "left";
 
-export type TerminalCounts = Partial<Record<TerminalSide, number>>;
+/**
+ * Per-side terminal layout: a count, or an ordered list of optional labels
+ * (empty / undefined entries still place a terminal, just unlabeled).
+ */
+export type TerminalSideConfig = number | readonly (string | undefined)[];
+
+export type TerminalCounts = Partial<Record<TerminalSide, TerminalSideConfig>>;
 
 export type Point = { x: number; y: number };
 
@@ -13,6 +19,8 @@ export type TerminalSpec = {
   index: number;
   x: number;
   y: number;
+  /** Optional short label drawn near the pad (e.g. "L1", "N"). */
+  label?: string;
 };
 
 export const DEFAULT_TERMINALS: TerminalCounts = {
@@ -21,6 +29,14 @@ export const DEFAULT_TERMINALS: TerminalCounts = {
   bottom: 1,
   left: 1,
 };
+
+/**
+ * How many terminals a side config places.
+ */
+export function terminalSideCount(config: TerminalSideConfig | undefined) {
+  if (config === undefined) return 0;
+  return typeof config === "number" ? config : config.length;
+}
 
 /**
  * Evenly spaced positions along an edge length (centers between the ends).
@@ -68,7 +84,7 @@ export function terminalPositions(
 }
 
 /**
- * Lists every terminal on a module with local coordinates.
+ * Lists every terminal on a module with local coordinates and optional labels.
  */
 export function listTerminals(
   terminals: TerminalCounts,
@@ -76,13 +92,42 @@ export function listTerminals(
   height: number,
 ): TerminalSpec[] {
   return (Object.keys(terminals) as TerminalSide[]).flatMap((side) => {
-    const count = terminals[side] ?? 0;
-    return terminalPositions(side, count, width, height).map((pos, index) => ({
-      side,
-      index,
-      ...pos,
-    }));
+    const config = terminals[side];
+    const count = terminalSideCount(config);
+    const labels = typeof config === "number" || config === undefined ? null : config;
+    return terminalPositions(side, count, width, height).map((pos, index) => {
+      const raw = labels?.[index];
+      const label = raw && raw.length > 0 ? raw : undefined;
+      return {
+        side,
+        index,
+        ...pos,
+        ...(label ? { label } : {}),
+      };
+    });
   });
+}
+
+/**
+ * Local offset from a terminal center toward the module body, centered in the
+ * white gap between the pad edge and the shell.
+ */
+export function terminalLabelOffset(side: TerminalSide): Point {
+  const gapMid = TERMINAL_RADIUS + (TERMINAL_OUTSET - TERMINAL_RADIUS) / 2;
+  switch (side) {
+    case "top":
+      return { x: 0, y: gapMid };
+    case "bottom":
+      return { x: 0, y: -gapMid };
+    case "left":
+      return { x: gapMid, y: 0 };
+    case "right":
+      return { x: -gapMid, y: 0 };
+    default: {
+      const _exhaustive: never = side;
+      return _exhaustive;
+    }
+  }
 }
 
 /**
