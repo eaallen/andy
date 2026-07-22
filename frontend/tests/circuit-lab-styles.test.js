@@ -68,8 +68,11 @@ describe("circuit-lab pre mount", () => {
     expect(host.shadowRoot).toBeTruthy();
     expect(host.shadowRoot.querySelector("[data-lab-toolbar]")).toBeTruthy();
     expect(host.shadowRoot.querySelector("[data-lab-stage]")).toBeTruthy();
+    expect(host.shadowRoot.querySelector("[data-lab-zoom]")).toBeTruthy();
+    expect(host.shadowRoot.querySelector("[data-lab-zoom-label]")).toBeTruthy();
     expect(host.querySelector("[data-lab-toolbar]")).toBeNull();
     expect(host.shadowRoot.querySelector("style[data-circuit-lab-styles]")).toBeTruthy();
+    expect(host.shadowRoot.querySelector("style").textContent).toContain("touch-action: none");
   });
 
   it("shows a config error for empty pre.circuit-lab blocks", () => {

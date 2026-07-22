@@ -11,10 +11,18 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 14px;
   color: #1a1a1a;
   background: #f4f4f5;
+}
+
+/* Keep the lab viewport fixed on mobile (no rubber-band page scroll). */
+body {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
 }
 
 .app-shell {
@@ -22,6 +30,8 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .lab-picker {

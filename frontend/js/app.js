@@ -10,6 +10,18 @@ import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
 import { createGrader } from "./grade.js";
 import { resolveCoord } from "./lab-config.js";
+import {
+  BUTTON_SCALE_BY,
+  INITIAL_VIEW,
+  PAN_DRAG_THRESHOLD,
+  PINCH_ZOOM_INTENSITY,
+  STAGE_DEFAULT_CURSOR,
+  applyViewToStage,
+  boundsFromClientRect,
+  clampView,
+  normalizeWheelDeltas,
+  zoomAt,
+} from "./canvas-nav.js";
 
 /**
  * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
@@ -35,8 +47,13 @@ export function bootCircuitLab(host, config) {
   const btnCheck = uiRoot.querySelector("[data-lab-action=\"check\"]");
   const btnUndo = uiRoot.querySelector("[data-lab-action=\"undo\"]");
   const wireColorGroup = uiRoot.querySelector("[data-lab-wire-colors]");
+  const stageWrap = uiRoot.querySelector("[data-lab-stage-wrap]");
   const stageContainer = uiRoot.querySelector("[data-lab-stage]");
   const titleEl = uiRoot.querySelector("[data-lab-title]");
+  const zoomOutBtn = uiRoot.querySelector("[data-lab-zoom=\"out\"]");
+  const zoomInBtn = uiRoot.querySelector("[data-lab-zoom=\"in\"]");
+  const zoomResetBtn = uiRoot.querySelector("[data-lab-zoom=\"reset\"]");
+  const zoomLabel = uiRoot.querySelector("[data-lab-zoom-label]");
 
   if (titleEl) {
     titleEl.textContent = config.title;
@@ -78,6 +95,90 @@ export function bootCircuitLab(host, config) {
   const componentLayer = new Konva.Layer();
   stage.add(wireLayer);
   stage.add(componentLayer);
+
+  /** @type {{ scale: number; x: number; y: number }} */
+  let view = { scale: INITIAL_VIEW.scale, x: INITIAL_VIEW.x, y: INITIAL_VIEW.y };
+  /** @type {{ minX: number; minY: number; maxX: number; maxY: number }} */
+  let contentBounds = {
+    minX: 0,
+    minY: 0,
+    maxX: stage.width(),
+    maxY: stage.height(),
+  };
+  let suppressStageClick = false;
+
+  stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+
+  /**
+   * Returns the current stage pixel size.
+   */
+  function viewportSize() {
+    return { width: stage.width(), height: stage.height() };
+  }
+
+  /**
+   * Updates the zoom percent label in the toolbar.
+   */
+  function syncZoomLabel() {
+    if (zoomLabel) {
+      zoomLabel.textContent = Math.round(view.scale * 100) + "%";
+    }
+  }
+
+  /**
+   * Applies a camera view to the stage and refreshes the zoom label.
+   * @param {{ scale: number; x: number; y: number }} next - Camera to apply.
+   */
+  function setView(next) {
+    view = clampView(next, viewportSize(), contentBounds);
+    applyViewToStage(stage, view);
+    syncZoomLabel();
+    stage.batchDraw();
+  }
+
+  /**
+   * Reads live component positions and updates pan limits.
+   */
+  function syncContentBounds() {
+    const rect = componentLayer.getClientRect({
+      relativeTo: stage,
+      skipShadow: true,
+    });
+    if (rect.width <= 0 || rect.height <= 0) {
+      contentBounds = {
+        minX: 0,
+        minY: 0,
+        maxX: stage.width(),
+        maxY: stage.height(),
+      };
+      return;
+    }
+    contentBounds = boundsFromClientRect(rect);
+  }
+
+  /**
+   * Zooms toward the stage center by a fixed step.
+   * @param {number} factor - Multiplier applied to the current scale.
+   */
+  function zoomBy(factor) {
+    const size = viewportSize();
+    setView(
+      zoomAt(
+        view,
+        { x: size.width / 2, y: size.height / 2 },
+        view.scale * factor,
+        size,
+        contentBounds
+      )
+    );
+  }
+
+  /**
+   * Resets stage scale and pan to the default view.
+   */
+  function resetView() {
+    setView(INITIAL_VIEW);
+  }
 
   const sounds = createSoundPlayer();
 
@@ -297,6 +398,8 @@ export function bootCircuitLab(host, config) {
       componentLayer.add(group);
       bindComponent(group);
     }
+    syncContentBounds();
+    setView(view);
   }
 
   /**
@@ -419,13 +522,15 @@ export function bootCircuitLab(host, config) {
       stage.container().style.cursor = "grab";
     });
     group.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
+      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
     });
     group.on("dragstart", function () {
       stage.container().style.cursor = "grabbing";
     });
     group.on("dragend", function () {
       stage.container().style.cursor = "grab";
+      syncContentBounds();
+      setView(view);
     });
 
     if (group.terminals) {
@@ -803,7 +908,128 @@ export function bootCircuitLab(host, config) {
     }
   });
 
-  stage.on("click tap", function () {
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener("click", function () {
+      zoomBy(1 / BUTTON_SCALE_BY);
+    });
+  }
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener("click", function () {
+      zoomBy(BUTTON_SCALE_BY);
+    });
+  }
+  if (zoomResetBtn) {
+    zoomResetBtn.addEventListener("click", resetView);
+  }
+
+  /**
+   * Maps-style navigation: scroll pans; trackpad pinch (ctrl/meta+wheel) zooms.
+   * @param {Konva.KonvaEventObject} e - Wheel event.
+   */
+  function handleWheel(e) {
+    e.evt.preventDefault();
+    const size = viewportSize();
+    const deltas = normalizeWheelDeltas(e.evt, size);
+
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+      setView(
+        zoomAt(
+          view,
+          pointer,
+          view.scale * Math.exp(-deltas.deltaY * PINCH_ZOOM_INTENSITY),
+          size,
+          contentBounds
+        )
+      );
+      return;
+    }
+
+    setView({
+      scale: view.scale,
+      x: view.x - deltas.deltaX,
+      y: view.y - deltas.deltaY,
+    });
+  }
+
+  /**
+   * Starts click-drag panning when the pointer goes down on empty canvas.
+   * @param {Konva.KonvaEventObject} e - Pointer down event.
+   */
+  function handleStagePointerDown(e) {
+    if (e.target !== stage) {
+      return;
+    }
+    // Stop mobile browsers from scrolling the page while we pan the lab.
+    e.evt.preventDefault();
+    const startPointer = stage.getPointerPosition();
+    if (!startPointer) {
+      return;
+    }
+    const origin = { x: startPointer.x, y: startPointer.y };
+    const startView = { scale: view.scale, x: view.x, y: view.y };
+    let panning = false;
+
+    /**
+     * Pans the view by the pointer delta (content follows the drag).
+     * @param {Konva.KonvaEventObject} evt - Move event.
+     */
+    function onMove(evt) {
+      evt.evt.preventDefault();
+      const pos = stage.getPointerPosition();
+      if (!pos) {
+        return;
+      }
+      const dx = pos.x - origin.x;
+      const dy = pos.y - origin.y;
+      if (!panning) {
+        if (dx * dx + dy * dy < PAN_DRAG_THRESHOLD * PAN_DRAG_THRESHOLD) {
+          return;
+        }
+        panning = true;
+        suppressStageClick = true;
+        if (stageWrap) {
+          stageWrap.classList.add("lab-stage-wrap--panning");
+        }
+        stage.container().style.cursor = "grabbing";
+      }
+
+      setView({
+        scale: startView.scale,
+        x: startView.x + dx,
+        y: startView.y + dy,
+      });
+    }
+
+    /**
+     * Ends the pan gesture.
+     */
+    function onUp() {
+      stage.off(".stagePan");
+      if (stageWrap) {
+        stageWrap.classList.remove("lab-stage-wrap--panning");
+      }
+      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+    }
+
+    stage.on("mousemove.stagePan touchmove.stagePan", onMove);
+    stage.on("mouseup.stagePan touchend.stagePan", onUp);
+  }
+
+  stage.on("wheel", handleWheel);
+  stage.on("mousedown touchstart", handleStagePointerDown);
+
+  stage.on("click tap", function (e) {
+    if (e.target !== stage) {
+      return;
+    }
+    if (suppressStageClick) {
+      suppressStageClick = false;
+      return;
+    }
     wireManager.clearWireSelection();
     wireManager.clearPendingHighlight();
     wireLayer.batchDraw();
@@ -843,6 +1069,8 @@ export function bootCircuitLab(host, config) {
     const toolbarHeight = toolbar ? toolbar.offsetHeight : 52;
     stage.width(host.clientWidth || window.innerWidth);
     stage.height(Math.max(200, (host.clientHeight || window.innerHeight) - toolbarHeight));
+    syncContentBounds();
+    setView(view);
     wireManager.updateWirePositions();
     stage.batchDraw();
   }
@@ -851,6 +1079,7 @@ export function bootCircuitLab(host, config) {
 
   syncModeButtons();
   setWireColor("red");
+  syncZoomLabel();
   ensureComponents();
   showDemoCircuit();
 }

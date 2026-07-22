@@ -200,8 +200,8 @@ export function createWireManager(layer, options) {
    * @param {object} wire - Wire record.
    */
   function buildPoints(wire) {
-    const fromPos = getTerminalPosition(wire.from);
-    const toPos = getTerminalPosition(wire.to);
+    const fromPos = getTerminalPosition(wire.from, layer);
+    const toPos = getTerminalPosition(wire.to, layer);
     const points = [fromPos.x, fromPos.y];
     for (let i = 0; i < wire.bends.length; i += 1) {
       points.push(wire.bends[i].x, wire.bends[i].y);

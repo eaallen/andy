@@ -187,16 +187,45 @@ export const CIRCUIT_LAB_CSS = `
   font-weight: 600;
 }
 
+.toolbar-zoom-label {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #52525b;
+}
+
 .lab-stage-wrap {
+  position: relative;
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  /* Let Konva own touch pans/zooms instead of the browser scrolling the page. */
+  touch-action: none;
+  overscroll-behavior: none;
+  /* FigJam-style soft canvas with a subtle dotted grid. */
+  background-color: #e8e8e8;
+  background-image: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.14) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+.lab-stage-wrap--panning {
+  cursor: grabbing;
 }
 
 .lab-stage {
   width: 100%;
   height: 100%;
-  background: #fafafa;
+}
+
+.lab-stage canvas {
+  touch-action: none;
 }
 
 .circuit-lab-error {

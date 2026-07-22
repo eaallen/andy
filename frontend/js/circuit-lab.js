@@ -34,9 +34,16 @@ function createLabUiShell() {
     '<button type="button" class="toolbar-btn lab-btn-test" data-lab-action="test">Test</button>' +
     '<button type="button" class="toolbar-btn lab-btn-check" data-lab-action="check" disabled>Check</button>' +
     "</div>" +
+    '<div class="toolbar-divider" aria-hidden="true"></div>' +
+    '<div class="toolbar-group toolbar-zoom" data-lab-zoom role="group" aria-label="Zoom controls">' +
+    '<button type="button" class="toolbar-btn" data-lab-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>' +
+    '<span class="toolbar-zoom-label" data-lab-zoom-label>100%</span>' +
+    '<button type="button" class="toolbar-btn" data-lab-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>' +
+    '<button type="button" class="toolbar-btn" data-lab-zoom="reset" title="Reset view">Reset view</button>' +
+    "</div>" +
     '<p class="lab-hint" data-lab-hint></p>' +
     "</header>" +
-    '<div class="lab-stage-wrap">' +
+    '<div class="lab-stage-wrap" data-lab-stage-wrap>' +
     '<div class="lab-stage" data-lab-stage></div>' +
     "</div>";
   return ui;

@@ -14,14 +14,30 @@ export function nextComponentInstanceId(prefix) {
 }
 
 /**
- * Returns absolute stage coordinates for a terminal circle center.
- * @param {{ node: Konva.Circle, handle?: Konva.Group }} terminal - Terminal metadata object.
+ * Converts a container-absolute point into a node's local coordinate space.
+ * Used so wire endpoints stay anchored to terminals under stage pan/zoom.
+ * @param {{ x: number; y: number }} absPoint - Point in stage-container pixels.
+ * @param {Konva.Node} node - Node whose absolute transform defines the local space.
  */
-export function getTerminalPosition(terminal) {
-  if (terminal.handle) {
-    return terminal.handle.getAbsolutePosition();
+export function absoluteToLocal(absPoint, node) {
+  const transform = node.getAbsoluteTransform().copy().invert();
+  return transform.point(absPoint);
+}
+
+/**
+ * Returns terminal center in stage-local (world) coordinates, or in
+ * `relativeTo`'s local space when provided (e.g. the wire layer).
+ * @param {{ node: Konva.Circle, handle?: Konva.Group }} terminal - Terminal metadata object.
+ * @param {Konva.Node} [relativeTo] - Optional local space (defaults to the stage).
+ */
+export function getTerminalPosition(terminal, relativeTo) {
+  const node = terminal.handle || terminal.node;
+  const abs = node.getAbsolutePosition();
+  const space = relativeTo || node.getStage();
+  if (!space) {
+    return abs;
   }
-  return terminal.node.getAbsolutePosition();
+  return absoluteToLocal(abs, space);
 }
 
 /**
@@ -281,7 +297,7 @@ export function addTerminal(group, x, y, id, label, opts) {
     function onUp() {
       stage.off(".terminalSlide");
       group.draggable(true);
-      stage.container().style.cursor = "default";
+      stage.container().style.cursor = "grab";
       handle.fire("terminalslideend");
     }
 
