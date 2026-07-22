@@ -345,6 +345,7 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
    * @param {string[]} closedSwitchIds - Closed switch/button component ids.
    */
   function simulate(closedSwitchIds) {
+    console.log("simulate", closedSwitchIds);
     const result = {
       energized: emptyEnergized(),
       pathKeys: {},

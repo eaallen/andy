@@ -210,6 +210,7 @@ export function bootCircuitLab(host, config) {
   const wireManager = createWireManager(wireLayer, {
     resolveTerminal: resolveTerminal,
     onHistoryChange: syncUndoButton,
+    onChange: handleWiresChanged,
   });
 
   /**
@@ -228,6 +229,18 @@ export function bootCircuitLab(host, config) {
 
   const simulator = createCircuitSimulator(getWires, getComponents, config.simulation);
   const grader = createGrader(simulator, getComponents, config.grading);
+
+  /**
+   * Re-simulates after wire add/remove/undo (topology changed).
+   */
+  function handleWiresChanged() {
+    if (!components) {
+      return;
+    }
+    simulator.highlightPath({}, false);
+    refreshSimulation({ playSounds: false });
+    componentLayer.batchDraw();
+  }
 
   /**
    * Looks up a terminal by component key and terminal id.
@@ -287,7 +300,19 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Opens all toggle switches and clears light feedback (used when rewiring the stage).
+   * Re-runs continuity with currently closed toggles and applies load visuals.
+   * @param {{ playSounds?: boolean }} [options] - Whether to play sound profiles.
+   */
+  function refreshSimulation(options) {
+    const result = simulator.simulate(closedToggleIds());
+    applyLoadFeedback(result.energized, {
+      playSounds: !!(options && options.playSounds),
+    });
+    return result;
+  }
+
+  /**
+   * Opens all toggle switches and refreshes load feedback from a fresh simulation.
    */
   function resetSwitchAndLoadFeedback() {
     const list = componentList();
@@ -297,7 +322,7 @@ export function bootCircuitLab(host, config) {
         applySwitchVisual(component, { closed: false });
       }
     }
-    applyLoadFeedback({}, { playSounds: false });
+    refreshSimulation({ playSounds: false });
   }
 
   /**
@@ -497,9 +522,8 @@ export function bootCircuitLab(host, config) {
    * Clears path highlight when a button is released; keeps toggle-driven lamp state.
    */
   function handleButtonRelease() {
-    const result = simulator.simulate(closedToggleIds());
     simulator.highlightPath({}, false);
-    applyLoadFeedback(result.energized, { playSounds: false });
+    refreshSimulation({ playSounds: false });
     componentLayer.batchDraw();
   }
 
