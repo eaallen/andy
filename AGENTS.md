@@ -7,6 +7,7 @@ This is an **npm workspaces monorepo**:
 | Path | Package | Stack |
 | --- | --- | --- |
 | `frontend/` | `@andy/frontend` | Vite, Vitest, Konva circuit lab |
+| `react/` | `@andy/react` | Vite, React, TypeScript, react-konva (experimental) |
 | `server/` | `@andy/server` | Hono, TypeScript, Gemini / Meta |
 
 ### Setup
@@ -22,6 +23,7 @@ Requires **Node.js ≥ 20**.
 
 ```bash
 npm run dev:frontend   # http://localhost:5173
+npm run dev:react      # http://localhost:5174 — React + Konva experiment
 npm run dev:server     # http://localhost:3001
 ```
 
