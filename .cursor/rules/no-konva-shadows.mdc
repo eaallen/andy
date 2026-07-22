@@ -1,0 +1,18 @@
+---
+description: Never use Konva shadow props on canvas shapes
+globs: react/**/*.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+
+# No Konva shadows
+
+Do **not** use Konva shadow props on any shape (`Line`, `Rect`, `Circle`, `Group`, etc.):
+
+- `shadowColor`
+- `shadowBlur`
+- `shadowOffset` / `shadowOffsetX` / `shadowOffsetY`
+- `shadowOpacity`
+- `shadowEnabled`
+- `shadowForStrokeEnabled`
+
+Use fill, stroke, understrokes, or position changes for depth and state instead.

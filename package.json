@@ -5,21 +5,25 @@
   "description": "Remote Electrician Lab (Andy) — frontend circuit lab + AI diagram-to-YAML server.",
   "workspaces": [
     "frontend",
-    "server"
+    "server",
+    "react"
   ],
   "scripts": {
     "dev": "npm run dev -w @andy/frontend",
     "dev:frontend": "npm run dev -w @andy/frontend",
+    "dev:react": "npm run dev -w @andy/react",
     "dev:server": "npm run dev -w @andy/server",
     "dev:all": "npm run dev -w @andy/server & npm run dev -w @andy/frontend",
     "build": "npm run build -w @andy/frontend && npm run build -w @andy/server",
     "build:frontend": "npm run build -w @andy/frontend",
     "build:lib": "npm run build:lib -w @andy/frontend",
+    "build:react": "npm run build -w @andy/react",
     "build:server": "npm run build -w @andy/server",
-    "test": "npm run test -w @andy/frontend && npm run test -w @andy/server",
+    "test": "npm run test -w @andy/frontend && npm run test -w @andy/server && npm run test -w @andy/react",
     "test:frontend": "npm run test -w @andy/frontend",
     "test:server": "npm run test -w @andy/server",
-    "typecheck": "npm run typecheck -w @andy/server"
+    "test:react": "npm run test -w @andy/react",
+    "typecheck": "npm run typecheck -w @andy/server && npm run typecheck -w @andy/react"
   },
   "repository": {
     "type": "git",
