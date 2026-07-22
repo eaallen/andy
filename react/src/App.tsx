@@ -979,6 +979,8 @@ export function App() {
   const [wires, setWires] = useState<Wire[]>([]);
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [wireMenu, setWireMenu] = useState<WireMenu | null>(null);
+  const [lastWireColor, setLastWireColor] =
+    useState<WireColor>(DEFAULT_WIRE_COLOR);
   const [draft, setDraft] = useState<WireDraft | null>(null);
 
   contentBoundsRef.current = contentBounds;
@@ -1118,9 +1120,10 @@ export function App() {
   }, []);
 
   /**
-   * Sets the color of an existing wire.
+   * Sets the color of an existing wire and remembers it for new wires.
    */
   const setWireColor = useCallback((id: string, color: WireColor) => {
+    setLastWireColor(color);
     setWires((prev) =>
       prev.map((wire) => (wire.id === id ? { ...wire, color } : wire)),
     );
@@ -1129,24 +1132,27 @@ export function App() {
   /**
    * Adds a wire between two terminals when the pair is valid and new.
    */
-  const connectTerminals = useCallback((from: string, to: string) => {
-    if (from === to) return;
-    setSelectedWireId(null);
-    setWireMenu(null);
-    setWires((prev) => {
-      if (hasWireBetween(prev, from, to)) return prev;
-      return [
-        ...prev,
-        {
-          id: `wire-${from}-${to}-${prev.length}`,
-          from,
-          to,
-          bends: [],
-          color: DEFAULT_WIRE_COLOR,
-        },
-      ];
-    });
-  }, []);
+  const connectTerminals = useCallback(
+    (from: string, to: string) => {
+      if (from === to) return;
+      setSelectedWireId(null);
+      setWireMenu(null);
+      setWires((prev) => {
+        if (hasWireBetween(prev, from, to)) return prev;
+        return [
+          ...prev,
+          {
+            id: `wire-${from}-${to}-${prev.length}`,
+            from,
+            to,
+            bends: [],
+            color: lastWireColor,
+          },
+        ];
+      });
+    },
+    [lastWireColor],
+  );
 
   /**
    * Selects a wire and opens the actions menu at the click point.
