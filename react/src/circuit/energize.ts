@@ -25,10 +25,10 @@ export type LoadRefs = {
 
 /**
  * Returns whether either load terminal reaches any supply hot.
- * @param {Adjacency} adj - Wire adjacency.
- * @param {SupplyRefs} supply - Supply hot / return terminals.
- * @param {string} terminal - Load terminal to test.
- * @param {ContinuityGate[]} [gates] - Closed switch/button hops.
+ * @param adj - Wire adjacency.
+ * @param supply - Supply hot / return terminals.
+ * @param terminal - Load terminal to test.
+ * @param gates - Closed switch/button hops.
  */
 function reachesHot(
   adj: Adjacency,
@@ -43,10 +43,10 @@ function reachesHot(
  * Returns whether a load is energized the way a real two-terminal lamp would
  * light: one terminal reaches supply hot and the other reaches supply return,
  * in either polarity.
- * @param {Adjacency} adj - Wire adjacency.
- * @param {SupplyRefs} supply - Supply hot / return terminals.
- * @param {LoadRefs} load - Load endpoints.
- * @param {ContinuityGate[]} [gates] - Closed switch/button hops.
+ * @param adj - Wire adjacency.
+ * @param supply - Supply hot / return terminals.
+ * @param load - Load endpoints.
+ * @param gates - Closed switch/button hops.
  */
 export function isLoadEnergized(
   adj: Adjacency,
@@ -68,10 +68,10 @@ export function isLoadEnergized(
  * Returns whether the load is wired in the labeled polarity:
  * requireHot → supply hot and signal → supply return.
  * Use for grading deductions; visual energize stays polarity-agnostic.
- * @param {Adjacency} adj - Wire adjacency.
- * @param {SupplyRefs} supply - Supply hot / return terminals.
- * @param {LoadRefs} load - Load endpoints.
- * @param {ContinuityGate[]} [gates] - Closed switch/button hops.
+ * @param adj - Wire adjacency.
+ * @param supply - Supply hot / return terminals.
+ * @param load - Load endpoints.
+ * @param gates - Closed switch/button hops.
  */
 export function isLoadPolarityCorrect(
   adj: Adjacency,

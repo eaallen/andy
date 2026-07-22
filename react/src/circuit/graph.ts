@@ -19,8 +19,8 @@ export type ContinuityGate = {
 
 /**
  * Ensures a node exists in the adjacency map.
- * @param {Adjacency} adj - Neighbor map being built.
- * @param {string} key - Terminal key.
+ * @param adj - Neighbor map being built.
+ * @param key - Terminal key.
  */
 function ensure(adj: Adjacency, key: string) {
   if (!adj.has(key)) {
@@ -30,9 +30,9 @@ function ensure(adj: Adjacency, key: string) {
 
 /**
  * Adds an undirected edge between two terminal keys.
- * @param {Adjacency} adj - Neighbor map being built.
- * @param {string} a - First terminal key.
- * @param {string} b - Second terminal key.
+ * @param adj - Neighbor map being built.
+ * @param a - First terminal key.
+ * @param b - Second terminal key.
  */
 function link(adj: Adjacency, a: string, b: string) {
   if (a === b) return;
@@ -56,8 +56,8 @@ export function buildAdjacency(edges: WireEdge[]): Adjacency {
 
 /**
  * Returns the other side of each closed gate that touches `key`.
- * @param {string} key - Terminal key being visited.
- * @param {ContinuityGate[] | undefined} gates - Device gates (open ones ignored).
+ * @param key - Terminal key being visited.
+ * @param gates - Device gates (open ones ignored).
  */
 function gatedNeighbors(
   key: string,
@@ -106,10 +106,10 @@ export function reachableFrom(
 
 /**
  * Returns whether two terminals are in the same connected component.
- * @param {Adjacency} adj - Undirected neighbor map from wires.
- * @param {string} a - First terminal key.
- * @param {string} b - Second terminal key.
- * @param {ContinuityGate[]} [gates] - Optional device gates.
+ * @param adj - Undirected neighbor map from wires.
+ * @param a - First terminal key.
+ * @param b - Second terminal key.
+ * @param gates - Optional device gates.
  */
 export function areConnected(
   adj: Adjacency,

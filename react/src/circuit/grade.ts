@@ -24,8 +24,8 @@ export type ContinuityGrade = {
 
 /**
  * Grades wire-only continuity checks (ignores switch/button gates).
- * @param {WireEdge[]} wires - Student wires as terminal key pairs.
- * @param {ContinuityCheck[]} checks - Expected from→to paths.
+ * @param wires - Student wires as terminal key pairs.
+ * @param checks - Expected from→to paths.
  */
 export function gradeContinuity(
   wires: WireEdge[],
@@ -52,6 +52,10 @@ export function gradeContinuity(
 /**
  * Deducts when a load is wired with reversed hot/neutral polarity.
  * Visual energize may still light; this is a labeling / best-practice check.
+ * @param adj - Wire adjacency.
+ * @param supply - Supply hot / return terminals.
+ * @param load - Load endpoints.
+ * @param fail - Failure message when polarity is reversed.
  */
 export function gradeLoadPolarity(
   adj: Adjacency,
