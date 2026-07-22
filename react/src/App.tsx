@@ -745,6 +745,15 @@ const LabLayer = memo(function LabLayer({
       } => w !== null,
     );
 
+  // Selected wire paints last among wires so its halo + stroke sit on top.
+  const orderedWires =
+    selectedWireId == null
+      ? renderedWires
+      : [
+          ...renderedWires.filter((w) => w.id !== selectedWireId),
+          ...renderedWires.filter((w) => w.id === selectedWireId),
+        ];
+
   const draftFrom =
     draft !== null ? resolveTerminalWorldPos(draft.from, positions) : null;
   const draftPoints =
@@ -755,7 +764,7 @@ const LabLayer = memo(function LabLayer({
 
   return (
     <Layer onDragEnd={onContentBoundsChange}>
-      {renderedWires.map((wire) => {
+      {orderedWires.map((wire) => {
         const selected = wire.id === selectedWireId;
         const verts = wireVertices(wire.from, wire.bends, wire.to);
         const strokeWidth = selected
