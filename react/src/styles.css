@@ -86,6 +86,7 @@ body {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  cursor: grab;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 120px),
     repeating-linear-gradient(
@@ -101,6 +102,14 @@ body {
       rgba(148, 163, 184, 0.18) 20px
     ),
     #f8fafc;
+}
+
+.stage-wrap--panning {
+  cursor: grabbing;
+}
+
+.stage-wrap--panning canvas {
+  cursor: grabbing;
 }
 
 .wire-menu {

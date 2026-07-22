@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Circle, Group, Rect, Text } from "react-konva";
 import { useAppCtx } from "../appCtx";
+import { pointerCursorHandlers } from "./stageCursor";
 import {
   DEFAULT_TERMINALS,
   TERMINAL_RADIUS,
@@ -19,6 +20,11 @@ type ModuleProps = {
   fill?: string;
   stroke?: string;
   draggable?: boolean;
+  /**
+   * When false, the module body does not show a pointer cursor (e.g. doorbell
+   * shells where only the press pad is clickable).
+   */
+  bodyPointer?: boolean;
   /**
    * How many connection nodes to place on each edge.
    * Omitted sides get none; defaults to one on every side.
@@ -44,6 +50,7 @@ export function Module({
   fill = "#f0f9ff",
   stroke = "#7dd3fc",
   draggable = true,
+  bodyPointer = true,
   terminals = DEFAULT_TERMINALS,
   onDragMove,
   onDragEnd,
@@ -51,6 +58,7 @@ export function Module({
 }: ModuleProps) {
   const { wireMode, pendingTerminalId, onTerminalPointerDown } = useAppCtx();
   const sides = listTerminals(terminals, width, height);
+  const clickCursor = pointerCursorHandlers();
 
   return (
     <Group
@@ -71,6 +79,7 @@ export function Module({
         stroke={stroke}
         strokeWidth={2}
         cornerRadius={8}
+        {...(bodyPointer ? clickCursor : {})}
       />
       <Text
         x={10}
@@ -99,6 +108,7 @@ export function Module({
             hitStrokeWidth={12}
             name={`terminal-${tid}`}
             id={tid}
+            {...clickCursor}
             onMouseDown={(e) => {
               e.cancelBubble = true;
               onTerminalPointerDown(tid, e);

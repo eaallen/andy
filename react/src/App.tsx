@@ -9,6 +9,11 @@ import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
 import { Switch, SWITCH_SIZE } from "./comps/Switch";
 import { Module } from "./comps/Module";
 import {
+  pointerCursorHandlers,
+  setStageCursor,
+  STAGE_DEFAULT_CURSOR,
+} from "./comps/stageCursor";
+import {
   DEFAULT_TERMINALS,
   listTerminals,
   parseTerminalKey,
@@ -27,6 +32,8 @@ const PINCH_ZOOM_INTENSITY = 0.01;
 const EDGE_MARGIN = 72;
 /** Pointer travel (stage px) before a terminal press counts as a wire drag. */
 const WIRE_DRAG_THRESHOLD = 6;
+/** Pointer travel (stage px) before an empty-canvas press counts as a pan. */
+const PAN_DRAG_THRESHOLD = 4;
 /** Radius of bend / midpoint handles on a selected wire. */
 const BEND_HANDLE_RADIUS = 6;
 /** Spline tension for wire polylines (0 = sharp corners, higher = curvier). */
@@ -800,6 +807,7 @@ const LabLayer = memo(function LabLayer({
     draft?.kind === "drag" && draftFrom
       ? [draftFrom.x, draftFrom.y, draft.pointer.x, draft.pointer.y]
       : null;
+  const clickCursor = pointerCursorHandlers();
 
   return (
     <Layer onDragEnd={onContentBoundsChange}>
@@ -822,6 +830,7 @@ const LabLayer = memo(function LabLayer({
               }
               shadowBlur={wire.color === "white" || selected ? 2 : 0}
               shadowOpacity={wire.color === "white" || selected ? 0.55 : 0}
+              {...clickCursor}
               onClick={(e) => {
                 e.cancelBubble = true;
                 onWireSelect(wire.id, e);
@@ -851,6 +860,7 @@ const LabLayer = memo(function LabLayer({
                       stroke="#93c5fd"
                       strokeWidth={1.5}
                       opacity={0.9}
+                      {...clickCursor}
                       onMouseDown={(e) => {
                         e.cancelBubble = true;
                         onMidpointPointerDown(wire.id, segmentIndex, e);
@@ -874,6 +884,7 @@ const LabLayer = memo(function LabLayer({
                     stroke="#2563eb"
                     strokeWidth={2}
                     draggable
+                    {...clickCursor}
                     onMouseDown={(e) => {
                       e.cancelBubble = true;
                     }}
@@ -965,6 +976,8 @@ export function App() {
   const gestureRef = useRef<WireGesture | null>(null);
   const draftRef = useRef<WireDraft | null>(null);
   const positionsRef = useRef(INITIAL_POSITIONS);
+  /** True after an empty-canvas drag so the following click does not clear selection. */
+  const suppressStageClickRef = useRef(false);
   const [size, setSize] = useState<StageSize>({ width: 0, height: 0 });
   const [pressed, setPressed] = useState<PressedState>({
     front: false,
@@ -1414,11 +1427,77 @@ export function App() {
    */
   function handleStageClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
     if (e.target !== e.target.getStage()) return;
+    if (suppressStageClickRef.current) {
+      suppressStageClickRef.current = false;
+      return;
+    }
     if (draftRef.current?.kind === "pending") {
       setDraft(null);
     }
     clearWireSelection();
   }
+
+  /**
+   * Starts click-drag panning when the pointer goes down on empty canvas.
+   */
+  const handleStagePointerDown = useCallback(
+    (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (e.target !== e.target.getStage()) return;
+      const maybeStage = e.target.getStage();
+      if (!maybeStage) return;
+      const stageNode: KonvaStage = maybeStage;
+      const startPointer = stageNode.getPointerPosition();
+      if (!startPointer) return;
+      const origin = { x: startPointer.x, y: startPointer.y };
+
+      const startView = viewRef.current;
+      let panning = false;
+
+      /**
+       * Pans the view by the pointer delta (content follows the drag).
+       */
+      function onMove() {
+        const pos = stageNode.getPointerPosition();
+        if (!pos) return;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        if (!panning) {
+          if (dx * dx + dy * dy < PAN_DRAG_THRESHOLD * PAN_DRAG_THRESHOLD) {
+            return;
+          }
+          panning = true;
+          suppressStageClickRef.current = true;
+          wrapRef.current?.classList.add("stage-wrap--panning");
+          stageNode.container().style.cursor = "grabbing";
+        }
+
+        setView(
+          clampView(
+            {
+              ...startView,
+              x: startView.x + dx,
+              y: startView.y + dy,
+            },
+            size,
+            contentBoundsRef.current,
+          ),
+        );
+      }
+
+      /**
+       * Ends the pan gesture.
+       */
+      function onUp() {
+        stageNode.off(".stagePan");
+        wrapRef.current?.classList.remove("stage-wrap--panning");
+        stageNode.container().style.cursor = STAGE_DEFAULT_CURSOR;
+      }
+
+      stageNode.on("mousemove.stagePan touchmove.stagePan", onMove);
+      stageNode.on("mouseup.stagePan touchend.stagePan", onUp);
+    },
+    [size],
+  );
 
   /**
    * Clears button presses, wires, selection, and any in-progress draft.
@@ -1565,6 +1644,11 @@ export function App() {
               x={view.x}
               y={view.y}
               onWheel={handleWheel}
+              onMouseDown={handleStagePointerDown}
+              onTouchStart={handleStagePointerDown}
+              onMouseLeave={(e) => {
+                setStageCursor(e, STAGE_DEFAULT_CURSOR);
+              }}
               onClick={handleStageClick}
               onTap={handleStageClick}
             >

@@ -1,5 +1,6 @@
 import { Circle, Text } from "react-konva";
 import { Module } from "./Module";
+import { pointerCursorHandlers } from "./stageCursor";
 
 const WIDTH = 100;
 const HEIGHT = 84;
@@ -52,6 +53,8 @@ export function DoorbellButton<Id extends string>({
     onPressedChange(id, false);
   }
 
+  const clickCursor = pointerCursorHandlers();
+
   return (
     <Module
       id={id}
@@ -62,6 +65,7 @@ export function DoorbellButton<Id extends string>({
       title={title}
       fill={fill}
       stroke={stroke}
+      bodyPointer={false}
       terminals={{ top: 3 }}
       onDragMove={
         onDragMove
@@ -104,9 +108,13 @@ export function DoorbellButton<Id extends string>({
         shadowOffsetY={pressed ? 1 : 3}
         shadowForStrokeEnabled={false}
         hitStrokeWidth={8}
+        {...clickCursor}
         onMouseDown={press}
         onMouseUp={release}
-        onMouseLeave={release}
+        onMouseLeave={(e) => {
+          release();
+          clickCursor.onMouseLeave(e);
+        }}
         onTouchStart={press}
         onTouchEnd={release}
       />
