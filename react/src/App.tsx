@@ -26,6 +26,11 @@ import {
   WIRE_TENSION,
   wireSegmentMidpoints,
 } from "./comps/wirePath";
+import {
+  bridgeEdgesForClosed,
+  buildAdjacency,
+} from "./circuit/graph";
+import { LAB_BRIDGES } from "./circuit/labBridges";
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -975,6 +980,18 @@ export function App() {
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
   const wireMode = draft !== null;
 
+  /** Continuity graph: student wires plus bridges for pressed doorbells. */
+  const adjacency = useMemo(() => {
+    const wireEdges = wires.map((w) => ({ from: w.from, to: w.to }));
+    const closedIds = (Object.keys(pressed) as ButtonId[]).filter(
+      (id) => pressed[id],
+    );
+    return buildAdjacency([
+      ...wireEdges,
+      ...bridgeEdgesForClosed(closedIds, LAB_BRIDGES),
+    ]);
+  }, [wires, pressed]);
+
   /**
    * Reads live module positions from the stage and updates pan limits.
    */
@@ -1049,10 +1066,11 @@ export function App() {
       .map(([id]) => id);
     if (active.length > 0) return `Pressed: ${active.join(", ")}`;
     if (wires.length > 0) {
-      return `${wires.length} wire${wires.length === 1 ? "" : "s"} — click a wire to select`;
+      const nodes = adjacency.size;
+      return `${wires.length} wire${wires.length === 1 ? "" : "s"} · ${nodes} connected terminal${nodes === 1 ? "" : "s"}`;
     }
     return "Idle — drag or click terminals to wire";
-  }, [draft, pressed, selectedWireId, wires.length]);
+  }, [adjacency, draft, pressed, selectedWireId, wires.length]);
 
   /**
    * Updates one button's pressed flag.
