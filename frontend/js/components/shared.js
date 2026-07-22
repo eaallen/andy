@@ -320,25 +320,26 @@ export function addTerminal(group, x, y, id, label, opts) {
 }
 
 /**
- * Draws a white component box with title and subtle shadow.
+ * Draws a blue-tinted component box with title and subtle shadow.
+ * Matches the React lab Module shell (fill #f0f9ff, stroke #7dd3fc).
  * @param {Konva.Group} group - Parent component group.
  * @param {number} width - Box width.
  * @param {number} height - Box height.
  * @param {string} title - Title shown at the top of the box.
  */
 export function addComponentShell(group, width, height, title) {
-  // listening: true so dragging the white box moves the component group.
+  // listening: true so dragging the box moves the component group.
   const rect = new Konva.Rect({
     x: 0,
     y: 0,
     width: width,
     height: height,
-    fill: "#ffffff",
-    stroke: "#a1a1aa",
-    strokeWidth: 1.5,
+    fill: "#f0f9ff",
+    stroke: "#7dd3fc",
+    strokeWidth: 2,
     cornerRadius: 8,
-    shadowColor: "rgba(0,0,0,0.08)",
-    shadowBlur: 8,
+    shadowColor: "rgba(37, 99, 235, 0.12)",
+    shadowBlur: 10,
     shadowOffsetY: 2,
     name: "component-shell",
   });
@@ -350,7 +351,7 @@ export function addComponentShell(group, width, height, title) {
     fontSize: 13,
     fontFamily: "system-ui, Arial, sans-serif",
     fontStyle: "bold",
-    fill: "#18181b",
+    fill: "#1e40af",
     listening: false,
   });
 

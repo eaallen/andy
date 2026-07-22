@@ -16,10 +16,15 @@ import {
 export function applyLampVisual(lamp, state) {
   const lit = !!state.lit;
   lamp.isLit = lit;
+  const shell = lamp.findOne(".component-shell");
   const bulb = lamp.lampBulb;
   const glow = lamp.lampGlow;
   const filament = lamp.lampFilament;
 
+  if (shell) {
+    shell.fill(lit ? "#fefce8" : "#f0f9ff");
+    shell.stroke(lit ? "#ca8a04" : "#7dd3fc");
+  }
   if (bulb) {
     bulb.fill(lit ? "#fef08a" : "#f4f4f5");
     bulb.stroke(lit ? "#ca8a04" : "#a1a1aa");

@@ -8,9 +8,11 @@ import {
 } from "./shared.js";
 import {
   addSpstToggleSymbol,
-  addSwitchHitAndHint,
+  addSwitchBridges,
+  addSwitchButton,
   addSwitchShell,
   applySwitchVisual,
+  bindSwitchBridgeRefresh,
 } from "./switch-shared.js";
 
 /**
@@ -25,8 +27,9 @@ export function makeFourWay(label, x, y) {
   const title = label || "4-Way";
   const shell = addSwitchShell(group, 140, 110, title);
 
-  addSpstToggleSymbol(group, shell.width / 2, 40, 48);
-  addSwitchHitAndHint(group, shell.width, 86, "Straight");
+  addSwitchBridges(group, 2);
+  addSwitchButton(group, shell.width, "Straight");
+  addSpstToggleSymbol(group, shell.width);
 
   const topY = -TERMINAL_OUTSET;
   const bottomY = shell.height + TERMINAL_OUTSET;
@@ -73,6 +76,7 @@ export function makeFourWay(label, x, y) {
     nextComponentInstanceId("four-way"),
     terminals
   );
+  bindSwitchBridgeRefresh(group);
   applySwitchVisual(group, { closed: false });
   return group;
 }

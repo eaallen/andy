@@ -7,10 +7,12 @@ import {
   nextComponentInstanceId,
 } from "./shared.js";
 import {
-  addSpstToggleSymbol,
-  addSwitchHitAndHint,
+  addSwitchBridges,
+  addSwitchButton,
   addSwitchShell,
+  addThreeWayToggleSymbol,
   applySwitchVisual,
+  bindSwitchBridgeRefresh,
 } from "./switch-shared.js";
 
 /**
@@ -23,10 +25,11 @@ import {
 export function makeThreeWay(label, x, y) {
   const group = new Konva.Group({ x: x, y: y });
   const title = label || "3-Way";
-  const shell = addSwitchShell(group, 130, 96, title);
+  const shell = addSwitchShell(group, 130, 88, title);
 
-  addSpstToggleSymbol(group, shell.width / 2, 34, 44);
-  addSwitchHitAndHint(group, shell.width, 72, "T1");
+  addSwitchBridges(group, 1);
+  addSwitchButton(group, shell.width, "T1");
+  addThreeWayToggleSymbol(group, shell.width);
 
   const terminalY = -TERMINAL_OUTSET;
   const spacing = shell.width / 4;
@@ -64,6 +67,7 @@ export function makeThreeWay(label, x, y) {
     nextComponentInstanceId("three-way"),
     terminals
   );
+  bindSwitchBridgeRefresh(group);
   applySwitchVisual(group, { closed: false });
   return group;
 }

@@ -8,9 +8,11 @@ import {
 } from "./shared.js";
 import {
   addSpstToggleSymbol,
-  addSwitchHitAndHint,
+  addSwitchBridges,
+  addSwitchButton,
   addSwitchShell,
   applySwitchVisual,
+  bindSwitchBridgeRefresh,
 } from "./switch-shared.js";
 
 /**
@@ -25,8 +27,9 @@ export function makeSwitch(label, x, y) {
   const title = label || "Switch";
   const shell = addSwitchShell(group, 110, 88, title);
 
-  addSpstToggleSymbol(group, shell.width / 2, 34, 40);
-  addSwitchHitAndHint(group, shell.width, 68, "Open");
+  addSwitchBridges(group, 1);
+  addSwitchButton(group, shell.width, "Open");
+  addSpstToggleSymbol(group, shell.width);
 
   const terminalY = -TERMINAL_OUTSET;
   const leftX = shell.width / 3;
@@ -59,6 +62,7 @@ export function makeSwitch(label, x, y) {
     nextComponentInstanceId("switch"),
     terminals
   );
+  bindSwitchBridgeRefresh(group);
   applySwitchVisual(group, { closed: false });
   return group;
 }
