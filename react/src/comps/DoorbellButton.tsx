@@ -1,3 +1,4 @@
+import type { KonvaEventObject } from "konva/lib/Node";
 import { Circle, Text } from "react-konva";
 import { Module } from "./Module";
 
@@ -13,7 +14,14 @@ type DoorbellButtonProps<Id extends string = string> = {
   y: number;
   title: string;
   pressed: boolean;
+  pendingTerminalId?: string | null;
   onPressedChange: (id: Id, pressed: boolean) => void;
+  onDragMove?: (id: Id, x: number, y: number) => void;
+  onDragEnd?: (id: Id, x: number, y: number) => void;
+  onTerminalPointerDown?: (
+    terminalId: string,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
 };
 
 /**
@@ -26,7 +34,11 @@ export function DoorbellButton<Id extends string>({
   y,
   title,
   pressed,
+  pendingTerminalId = null,
   onPressedChange,
+  onDragMove,
+  onDragEnd,
+  onTerminalPointerDown,
 }: DoorbellButtonProps<Id>) {
   const fill = pressed ? "#dbeafe" : "#f0f9ff";
   const stroke = pressed ? "#2563eb" : "#7dd3fc";
@@ -50,6 +62,7 @@ export function DoorbellButton<Id extends string>({
 
   return (
     <Module
+      id={id}
       x={x}
       y={y}
       width={WIDTH}
@@ -58,6 +71,18 @@ export function DoorbellButton<Id extends string>({
       fill={fill}
       stroke={stroke}
       terminals={{ top: 3 }}
+      pendingTerminalId={pendingTerminalId}
+      onDragMove={
+        onDragMove
+          ? (moduleId, mx, my) => onDragMove(moduleId as Id, mx, my)
+          : undefined
+      }
+      onDragEnd={
+        onDragEnd
+          ? (moduleId, mx, my) => onDragEnd(moduleId as Id, mx, my)
+          : undefined
+      }
+      onTerminalPointerDown={onTerminalPointerDown}
     >
       {/* Metal-ish bezel around the button */}
       <Circle
@@ -119,3 +144,5 @@ export function DoorbellButton<Id extends string>({
     </Module>
   );
 }
+
+export const DOORBELL_SIZE = { width: WIDTH, height: HEIGHT } as const;

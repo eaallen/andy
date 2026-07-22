@@ -1,11 +1,21 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
+import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-import { Layer, Stage } from "react-konva";
-import { DoorbellButton } from "./comps/DoorbellButton";
-import { Switch } from "./comps/Switch";
+import { Layer, Line, Stage } from "react-konva";
+import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
+import { Switch, SWITCH_SIZE } from "./comps/Switch";
 import { Module } from "./comps/Module";
+import {
+  DEFAULT_TERMINALS,
+  listTerminals,
+  parseTerminalKey,
+  wirePairKey,
+  worldTerminalPos,
+  type Point,
+  type TerminalCounts,
+} from "./comps/terminals";
 
 const MIN_SCALE = 0.7;
 const MAX_SCALE = 3;
@@ -14,8 +24,11 @@ const BUTTON_SCALE_BY = 1.2;
 const PINCH_ZOOM_INTENSITY = 0.01;
 /** How many pixels of content must stay on-screen at each edge. */
 const EDGE_MARGIN = 72;
+/** Pointer travel (stage px) before a terminal press counts as a wire drag. */
+const WIRE_DRAG_THRESHOLD = 6;
 
 type ButtonId = "front" | "rear";
+type ModuleId = ButtonId | "switch" | "extra";
 
 type PressedState = Record<ButtonId, boolean>;
 
@@ -37,6 +50,28 @@ type ContentBounds = {
   maxY: number;
 };
 
+type ModuleLayout = {
+  width: number;
+  height: number;
+  terminals: TerminalCounts;
+};
+
+type Wire = {
+  id: string;
+  from: string;
+  to: string;
+};
+
+type WireDraft =
+  | { kind: "pending"; from: string }
+  | { kind: "drag"; from: string; pointer: Point };
+
+type WireGesture = {
+  from: string;
+  start: Point;
+  dragging: boolean;
+};
+
 /**
  * Fallback world-space box until the stage measures live module bounds.
  * Pan stops once the content box is about to leave the viewport.
@@ -49,6 +84,36 @@ const INITIAL_CONTENT_BOUNDS: ContentBounds = {
 };
 
 const INITIAL_VIEW: ViewState = { scale: 1, x: 0, y: 0 };
+
+const INITIAL_POSITIONS: Record<ModuleId, Point> = {
+  front: { x: 120, y: 160 },
+  rear: { x: 420, y: 160 },
+  switch: { x: 0, y: 0 },
+  extra: { x: 280, y: 40 },
+};
+
+const MODULE_LAYOUTS: Record<ModuleId, ModuleLayout> = {
+  front: {
+    width: DOORBELL_SIZE.width,
+    height: DOORBELL_SIZE.height,
+    terminals: { top: 3 },
+  },
+  rear: {
+    width: DOORBELL_SIZE.width,
+    height: DOORBELL_SIZE.height,
+    terminals: { top: 3 },
+  },
+  switch: {
+    width: SWITCH_SIZE.width,
+    height: SWITCH_SIZE.height,
+    terminals: DEFAULT_TERMINALS,
+  },
+  extra: {
+    width: 100,
+    height: 100,
+    terminals: DEFAULT_TERMINALS,
+  },
+};
 
 /**
  * Clamps a number into [min, max], centering when the range is empty.
@@ -143,9 +208,77 @@ function zoomAt(
   );
 }
 
+/**
+ * Converts a stage pointer into world (layer) coordinates.
+ */
+function pointerToWorld(
+  pointer: Point,
+  view: ViewState,
+): Point {
+  return {
+    x: (pointer.x - view.x) / view.scale,
+    y: (pointer.y - view.y) / view.scale,
+  };
+}
+
+/**
+ * Reads a terminal id from a Konva node or one of its ancestors.
+ */
+function terminalIdFromNode(node: KonvaNode | null | undefined): string | null {
+  let current: KonvaNode | null | undefined = node;
+  while (current) {
+    const named = current.name?.() ?? "";
+    if (named.startsWith("terminal-")) {
+      return named.slice("terminal-".length);
+    }
+    const nodeId = current.id?.() ?? "";
+    if (nodeId.includes(":")) return nodeId;
+    current = current.getParent?.() ?? null;
+  }
+  return null;
+}
+
+/**
+ * Resolves the world-space center of a terminal key from module layouts/positions.
+ */
+function resolveTerminalWorldPos(
+  key: string,
+  positions: Record<string, Point>,
+): Point | null {
+  const parsed = parseTerminalKey(key);
+  if (!parsed) return null;
+  const layout = MODULE_LAYOUTS[parsed.componentId as ModuleId];
+  const modulePos = positions[parsed.componentId];
+  if (!layout || !modulePos) return null;
+
+  const local = listTerminals(layout.terminals, layout.width, layout.height).find(
+    (t) => t.side === parsed.side && t.index === parsed.index,
+  );
+  if (!local) return null;
+  return worldTerminalPos(modulePos, local);
+}
+
+/**
+ * Returns whether a wire between these endpoints already exists.
+ */
+function hasWireBetween(wires: Wire[], a: string, b: string) {
+  const pair = wirePairKey(a, b);
+  return wires.some((w) => wirePairKey(w.from, w.to) === pair);
+}
+
 type LabLayerProps = {
   pressed: PressedState;
+  positions: Record<ModuleId, Point>;
+  wires: Wire[];
+  draft: WireDraft | null;
+  pendingTerminalId: string | null;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
+  onModuleDragMove: (id: string, x: number, y: number) => void;
+  onModuleDragEnd: (id: string, x: number, y: number) => void;
+  onTerminalPointerDown: (
+    terminalId: string,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
   onContentBoundsChange: () => void;
 };
 
@@ -155,29 +288,100 @@ type LabLayerProps = {
  */
 const LabLayer = memo(function LabLayer({
   pressed,
+  positions,
+  wires,
+  draft,
+  pendingTerminalId,
   onPressedChange,
+  onModuleDragMove,
+  onModuleDragEnd,
+  onTerminalPointerDown,
   onContentBoundsChange,
 }: LabLayerProps) {
+  const wirePoints = wires
+    .map((wire) => {
+      const from = resolveTerminalWorldPos(wire.from, positions);
+      const to = resolveTerminalWorldPos(wire.to, positions);
+      if (!from || !to) return null;
+      return { id: wire.id, points: [from.x, from.y, to.x, to.y] };
+    })
+    .filter((w): w is { id: string; points: number[] } => w !== null);
+
+  const draftFrom =
+    draft !== null ? resolveTerminalWorldPos(draft.from, positions) : null;
+  const draftPoints =
+    draft?.kind === "drag" && draftFrom
+      ? [draftFrom.x, draftFrom.y, draft.pointer.x, draft.pointer.y]
+      : null;
+
   return (
     <Layer onDragEnd={onContentBoundsChange}>
+      {wirePoints.map((wire) => (
+        <Line
+          key={wire.id}
+          points={wire.points}
+          stroke="#334155"
+          strokeWidth={3}
+          lineCap="round"
+          lineJoin="round"
+          listening={false}
+        />
+      ))}
+      {draftPoints ? (
+        <Line
+          points={draftPoints}
+          stroke="#2563eb"
+          strokeWidth={2}
+          dash={[8, 6]}
+          lineCap="round"
+          listening={false}
+        />
+      ) : null}
       <DoorbellButton
         id="front"
-        x={120}
-        y={160}
+        x={positions.front.x}
+        y={positions.front.y}
         title="Front"
         pressed={pressed.front}
+        pendingTerminalId={pendingTerminalId}
         onPressedChange={onPressedChange}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+        onTerminalPointerDown={onTerminalPointerDown}
       />
       <DoorbellButton
         id="rear"
-        x={420}
-        y={160}
+        x={positions.rear.x}
+        y={positions.rear.y}
         title="Rear"
         pressed={pressed.rear}
+        pendingTerminalId={pendingTerminalId}
         onPressedChange={onPressedChange}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+        onTerminalPointerDown={onTerminalPointerDown}
       />
-      <Switch />
-      <Module width={100} height={100} title="Switch" />
+      <Switch
+        id="switch"
+        x={positions.switch.x}
+        y={positions.switch.y}
+        pendingTerminalId={pendingTerminalId}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+        onTerminalPointerDown={onTerminalPointerDown}
+      />
+      <Module
+        id="extra"
+        x={positions.extra.x}
+        y={positions.extra.y}
+        width={100}
+        height={100}
+        title="Switch"
+        pendingTerminalId={pendingTerminalId}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+        onTerminalPointerDown={onTerminalPointerDown}
+      />
     </Layer>
   );
 });
@@ -190,6 +394,9 @@ export function App() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<KonvaStage>(null);
   const contentBoundsRef = useRef(INITIAL_CONTENT_BOUNDS);
+  const viewRef = useRef(INITIAL_VIEW);
+  const gestureRef = useRef<WireGesture | null>(null);
+  const draftRef = useRef<WireDraft | null>(null);
   const [size, setSize] = useState<StageSize>({ width: 0, height: 0 });
   const [pressed, setPressed] = useState<PressedState>({
     front: false,
@@ -199,8 +406,17 @@ export function App() {
   const [contentBounds, setContentBounds] = useState<ContentBounds>(
     INITIAL_CONTENT_BOUNDS,
   );
+  const [positions, setPositions] =
+    useState<Record<ModuleId, Point>>(INITIAL_POSITIONS);
+  const [wires, setWires] = useState<Wire[]>([]);
+  const [draft, setDraft] = useState<WireDraft | null>(null);
 
   contentBoundsRef.current = contentBounds;
+  viewRef.current = view;
+  draftRef.current = draft;
+
+  const pendingTerminalId =
+    draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
 
   /**
    * Reads live module positions from the stage and updates pan limits.
@@ -262,12 +478,21 @@ export function App() {
   }, [size, contentBounds]);
 
   const status = useMemo(() => {
+    if (draft?.kind === "pending") {
+      return "Click another terminal to connect";
+    }
+    if (draft?.kind === "drag") {
+      return "Drop on a terminal to connect";
+    }
     const active = Object.entries(pressed)
       .filter(([, isDown]) => isDown)
       .map(([id]) => id);
-    if (active.length === 0) return "Idle — click a button";
-    return `Pressed: ${active.join(", ")}`;
-  }, [pressed]);
+    if (active.length > 0) return `Pressed: ${active.join(", ")}`;
+    if (wires.length > 0) {
+      return `${wires.length} wire${wires.length === 1 ? "" : "s"} — drag or click terminals`;
+    }
+    return "Idle — drag or click terminals to wire";
+  }, [draft, pressed, wires.length]);
 
   /**
    * Updates one button's pressed flag.
@@ -278,10 +503,145 @@ export function App() {
   }, []);
 
   /**
-   * Clears all button pressed state.
+   * Updates a module's world position while dragging (keeps wires attached).
+   */
+  const handleModuleDragMove = useCallback((id: string, x: number, y: number) => {
+    setPositions((prev) => {
+      if (!(id in prev)) return prev;
+      const current = prev[id as ModuleId];
+      if (current.x === x && current.y === y) return prev;
+      return { ...prev, [id]: { x, y } };
+    });
+  }, []);
+
+  /**
+   * Commits a module's position after drag and refreshes pan limits.
+   */
+  const handleModuleDragEnd = useCallback(
+    (id: string, x: number, y: number) => {
+      handleModuleDragMove(id, x, y);
+      syncContentBounds();
+    },
+    [handleModuleDragMove, syncContentBounds],
+  );
+
+  /**
+   * Adds a wire between two terminals when the pair is valid and new.
+   */
+  const connectTerminals = useCallback((from: string, to: string) => {
+    if (from === to) return;
+    setWires((prev) => {
+      if (hasWireBetween(prev, from, to)) return prev;
+      return [
+        ...prev,
+        {
+          id: `wire-${from}-${to}-${prev.length}`,
+          from,
+          to,
+        },
+      ];
+    });
+  }, []);
+
+  /**
+   * Starts a click-or-drag wire gesture from a terminal.
+   */
+  const handleTerminalPointerDown = useCallback(
+    (terminalId: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      const maybeStage = e.target.getStage();
+      if (!maybeStage) return;
+      const stageNode: KonvaStage = maybeStage;
+      const pointer = stageNode.getPointerPosition();
+      if (!pointer) return;
+
+      gestureRef.current = {
+        from: terminalId,
+        start: { x: pointer.x, y: pointer.y },
+        dragging: false,
+      };
+
+      /**
+       * Updates the rubber-band draft once the pointer has moved enough.
+       */
+      function onMove() {
+        const gesture = gestureRef.current;
+        if (!gesture) return;
+        const pos = stageNode.getPointerPosition();
+        if (!pos) return;
+
+        const dx = pos.x - gesture.start.x;
+        const dy = pos.y - gesture.start.y;
+        if (!gesture.dragging) {
+          if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+            return;
+          }
+          gesture.dragging = true;
+        }
+
+        const nextWorld = pointerToWorld(pos, viewRef.current);
+        setDraft({ kind: "drag", from: gesture.from, pointer: nextWorld });
+      }
+
+      /**
+       * Completes the gesture as either a drag-drop or a click selection.
+       */
+      function onUp() {
+        stageNode.off(".wireGesture");
+        const gesture = gestureRef.current;
+        gestureRef.current = null;
+        if (!gesture) return;
+
+        const pos = stageNode.getPointerPosition();
+        const hit = pos ? stageNode.getIntersection(pos) : null;
+        const targetId = terminalIdFromNode(hit);
+
+        if (gesture.dragging) {
+          if (targetId && targetId !== gesture.from) {
+            connectTerminals(gesture.from, targetId);
+          }
+          setDraft(null);
+          return;
+        }
+
+        // Click: select pending, clear if same, or complete the wire.
+        const current = draftRef.current;
+        if (current?.kind === "pending") {
+          if (current.from === gesture.from) {
+            setDraft(null);
+            return;
+          }
+          connectTerminals(current.from, gesture.from);
+          setDraft(null);
+          return;
+        }
+
+        setDraft({ kind: "pending", from: gesture.from });
+      }
+
+      stageNode.on("mousemove.wireGesture touchmove.wireGesture", onMove);
+      stageNode.on("mouseup.wireGesture touchend.wireGesture", onUp);
+    },
+    [connectTerminals],
+  );
+
+  /**
+   * Clears pending wire selection when clicking empty stage space.
+   */
+  function handleStageClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (e.target !== e.target.getStage()) return;
+    if (draftRef.current?.kind === "pending") {
+      setDraft(null);
+    }
+  }
+
+  /**
+   * Clears button presses, wires, and any in-progress draft.
    */
   function reset() {
     setPressed({ front: false, rear: false });
+    setWires([]);
+    setDraft(null);
+    gestureRef.current = null;
   }
 
   /**
@@ -381,10 +741,19 @@ export function App() {
             x={view.x}
             y={view.y}
             onWheel={handleWheel}
+            onClick={handleStageClick}
+            onTap={handleStageClick}
           >
             <LabLayer
               pressed={pressed}
+              positions={positions}
+              wires={wires}
+              draft={draft}
+              pendingTerminalId={pendingTerminalId}
               onPressedChange={setButtonPressed}
+              onModuleDragMove={handleModuleDragMove}
+              onModuleDragEnd={handleModuleDragEnd}
+              onTerminalPointerDown={handleTerminalPointerDown}
               onContentBoundsChange={syncContentBounds}
             />
           </Stage>

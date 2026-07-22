@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { Circle, Group, Rect, Text } from "react-konva";
-
-/** Distance from shell edge to terminal center so wire stubs stay visible. */
-const TERMINAL_OUTSET = 20;
-const TERMINAL_RADIUS = 7;
-
-type TerminalSide = "top" | "right" | "bottom" | "left";
-
-type TerminalCounts = Partial<Record<TerminalSide, number>>;
+import {
+  DEFAULT_TERMINALS,
+  TERMINAL_RADIUS,
+  listTerminals,
+  terminalKey,
+  type TerminalCounts,
+} from "./terminals";
 
 type ModuleProps = {
+  id: string;
   x?: number;
   y?: number;
   width: number;
@@ -23,66 +24,16 @@ type ModuleProps = {
    * Omitted sides get none; defaults to one on every side.
    */
   terminals?: TerminalCounts;
+  /** Terminal currently selected as the first endpoint of a new wire. */
+  pendingTerminalId?: string | null;
+  onDragMove?: (id: string, x: number, y: number) => void;
+  onDragEnd?: (id: string, x: number, y: number) => void;
+  onTerminalPointerDown?: (
+    terminalId: string,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
   children?: ReactNode;
 };
-
-const DEFAULT_TERMINALS: TerminalCounts = {
-  top: 1,
-  right: 1,
-  bottom: 1,
-  left: 1,
-};
-
-/**
- * Evenly spaced positions along an edge length (centers between the ends).
- * @param {number} count - Number of terminals on this side.
- * @param {number} length - Edge length in local pixels.
- */
-function spacedAlong(count: number, length: number) {
-  if (count <= 0) return [];
-  return Array.from({ length: count }, (_, i) => ((i + 1) / (count + 1)) * length);
-}
-
-/**
- * Local centers for terminals sitting just outside one shell edge.
- * @param {TerminalSide} side - Edge the nodes attach to.
- * @param {number} count - How many nodes on this edge.
- * @param {number} width - Module shell width.
- * @param {number} height - Module shell height.
- */
-function terminalPositions(
-  side: TerminalSide,
-  count: number,
-  width: number,
-  height: number,
-) {
-  switch (side) {
-    case "top":
-      return spacedAlong(count, width).map((x) => ({
-        x,
-        y: -TERMINAL_OUTSET,
-      }));
-    case "bottom":
-      return spacedAlong(count, width).map((x) => ({
-        x,
-        y: height + TERMINAL_OUTSET,
-      }));
-    case "left":
-      return spacedAlong(count, height).map((y) => ({
-        x: -TERMINAL_OUTSET,
-        y,
-      }));
-    case "right":
-      return spacedAlong(count, height).map((y) => ({
-        x: width + TERMINAL_OUTSET,
-        y,
-      }));
-    default: {
-      const _exhaustive: never = side;
-      return _exhaustive;
-    }
-  }
-}
 
 /**
  * Shared Konva shell for circuit modules (switches, transformers, buttons, etc.).
@@ -90,6 +41,7 @@ function terminalPositions(
  * children fill the interior.
  */
 export function Module({
+  id,
   x = 0,
   y = 0,
   width,
@@ -99,19 +51,26 @@ export function Module({
   stroke = "#7dd3fc",
   draggable = true,
   terminals = DEFAULT_TERMINALS,
+  pendingTerminalId = null,
+  onDragMove,
+  onDragEnd,
+  onTerminalPointerDown,
   children,
 }: ModuleProps) {
-  const sides = (Object.keys(terminals) as TerminalSide[]).flatMap((side) => {
-    const count = terminals[side] ?? 0;
-    return terminalPositions(side, count, width, height).map((pos, index) => ({
-      side,
-      index,
-      ...pos,
-    }));
-  });
+  const sides = listTerminals(terminals, width, height);
 
   return (
-    <Group x={x} y={y} draggable={draggable}>
+    <Group
+      x={x}
+      y={y}
+      draggable={draggable}
+      onDragMove={(e) => {
+        onDragMove?.(id, e.target.x(), e.target.y());
+      }}
+      onDragEnd={(e) => {
+        onDragEnd?.(id, e.target.x(), e.target.y());
+      }}
+    >
       <Rect
         width={width}
         height={height}
@@ -131,18 +90,32 @@ export function Module({
         listening={false}
       />
       {children}
-      {sides.map(({ side, index, x: tx, y: ty }) => (
-        <Circle
-          key={`${side}-${index}`}
-          x={tx}
-          y={ty}
-          radius={TERMINAL_RADIUS}
-          fill="#f8fafc"
-          stroke="#475569"
-          strokeWidth={2}
-          name={`terminal-${side}-${index}`}
-        />
-      ))}
+      {sides.map(({ side, index, x: tx, y: ty }) => {
+        const tid = terminalKey(id, side, index);
+        const isPending = pendingTerminalId === tid;
+        return (
+          <Circle
+            key={tid}
+            x={tx}
+            y={ty}
+            radius={TERMINAL_RADIUS}
+            fill="#f8fafc"
+            stroke={isPending ? "#2563eb" : "#475569"}
+            strokeWidth={isPending ? 3 : 2}
+            hitStrokeWidth={12}
+            name={`terminal-${tid}`}
+            id={tid}
+            onMouseDown={(e) => {
+              e.cancelBubble = true;
+              onTerminalPointerDown?.(tid, e);
+            }}
+            onTouchStart={(e) => {
+              e.cancelBubble = true;
+              onTerminalPointerDown?.(tid, e);
+            }}
+          />
+        );
+      })}
     </Group>
   );
 }
