@@ -204,6 +204,8 @@ type WireActionsMenuProps = {
   /** Stage wrap size used to keep the menu on-screen. */
   viewport: StageSize;
   color: WireColor;
+  /** Closes the menu when the user presses outside it. */
+  onDismiss: () => void;
   onDelete: () => void;
   onToggleColorPicker: () => void;
   onPickColor: (color: WireColor) => void;
@@ -221,6 +223,7 @@ function WireActionsMenu({
   screen,
   viewport,
   color,
+  onDismiss,
   onDelete,
   onToggleColorPicker,
   onPickColor,
@@ -264,6 +267,23 @@ function WireActionsMenu({
     viewport.height,
     menu.colorPickerOpen,
   ]);
+
+  // Close when pressing anywhere except the menu itself (wire, stage, toolbar, …).
+  useEffect(() => {
+    /**
+     * Dismisses the menu on an outside pointer press.
+     */
+    function onPointerDown(evt: PointerEvent) {
+      const el = menuRef.current;
+      if (!el) return;
+      const target = evt.target;
+      if (target instanceof Node && el.contains(target)) return;
+      onDismiss();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [onDismiss]);
 
   return (
     <div
@@ -978,6 +998,12 @@ export function App() {
   const positionsRef = useRef(INITIAL_POSITIONS);
   /** True after an empty-canvas drag so the following click does not clear selection. */
   const suppressStageClickRef = useRef(false);
+  /**
+   * True after an outside press dismisses the wire menu, so a following wire
+   * click in the same gesture does not immediately reopen it.
+   */
+  const suppressWireMenuOpenRef = useRef(false);
+  const wireMenuRef = useRef<WireMenu | null>(null);
   const [size, setSize] = useState<StageSize>({ width: 0, height: 0 });
   const [pressed, setPressed] = useState<PressedState>({
     front: false,
@@ -1000,6 +1026,7 @@ export function App() {
   viewRef.current = view;
   draftRef.current = draft;
   positionsRef.current = positions;
+  wireMenuRef.current = wireMenu;
 
   const pendingTerminalId =
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
@@ -1120,7 +1147,22 @@ export function App() {
    */
   const clearWireSelection = useCallback(() => {
     setSelectedWireId(null);
+    wireMenuRef.current = null;
     setWireMenu(null);
+  }, []);
+
+  /**
+   * Closes the wire actions menu without clearing wire selection.
+   * Suppresses reopening from the same press/click gesture (e.g. on a wire).
+   */
+  const dismissWireMenu = useCallback(() => {
+    if (!wireMenuRef.current) return;
+    suppressWireMenuOpenRef.current = true;
+    wireMenuRef.current = null;
+    setWireMenu(null);
+    window.setTimeout(() => {
+      suppressWireMenuOpenRef.current = false;
+    }, 0);
   }, []);
 
   /**
@@ -1129,6 +1171,7 @@ export function App() {
   const deleteWire = useCallback((id: string) => {
     setWires((prev) => prev.filter((w) => w.id !== id));
     setSelectedWireId(null);
+    wireMenuRef.current = null;
     setWireMenu(null);
   }, []);
 
@@ -1169,23 +1212,36 @@ export function App() {
 
   /**
    * Selects a wire and opens the actions menu at the click point.
+   * If the menu is already open, closes it instead (click-away, including on the wire).
    */
   const handleWireSelect = useCallback(
     (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
       setDraft(null);
       gestureRef.current = null;
       setSelectedWireId(id);
-      const stage = e.target.getStage();
-      const pointer = stage?.getPointerPosition();
-      if (!pointer) {
+
+      // Outside dismiss (or an already-open menu) should not reopen on this click.
+      if (suppressWireMenuOpenRef.current || wireMenuRef.current) {
+        suppressWireMenuOpenRef.current = false;
+        wireMenuRef.current = null;
         setWireMenu(null);
         return;
       }
-      setWireMenu({
+
+      const stage = e.target.getStage();
+      const pointer = stage?.getPointerPosition();
+      if (!pointer) {
+        wireMenuRef.current = null;
+        setWireMenu(null);
+        return;
+      }
+      const nextMenu: WireMenu = {
         wireId: id,
         world: pointerToWorld(pointer, viewRef.current),
         colorPickerOpen: false,
-      });
+      };
+      wireMenuRef.current = nextMenu;
+      setWireMenu(nextMenu);
     },
     [],
   );
@@ -1687,6 +1743,7 @@ export function App() {
               wires.find((w) => w.id === wireMenu.wireId)?.color ??
               DEFAULT_WIRE_COLOR
             }
+            onDismiss={dismissWireMenu}
             onDelete={() => deleteWire(wireMenu.wireId)}
             onToggleColorPicker={() =>
               setWireMenu((prev) =>
