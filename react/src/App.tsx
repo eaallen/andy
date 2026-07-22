@@ -23,9 +23,7 @@ import {
   type TerminalCounts,
 } from "./comps/terminals";
 import {
-  findWireJumpSites,
   WIRE_TENSION,
-  wirePointsWithJumps,
   wireSegmentMidpoints,
 } from "./comps/wirePath";
 
@@ -42,6 +40,14 @@ const WIRE_DRAG_THRESHOLD = 6;
 const PAN_DRAG_THRESHOLD = 4;
 /** Radius of bend / midpoint handles on a selected wire. */
 const BEND_HANDLE_RADIUS = 6;
+/** Colored stroke width for an unselected wire. */
+const WIRE_STROKE_WIDTH = 3;
+/** Colored stroke width for the selected wire. */
+const WIRE_STROKE_WIDTH_SELECTED = 5;
+/** Extra width added under the colored stroke so crossings stay readable. */
+const WIRE_UNDERSTROKE_PAD = 5;
+/** Matches `.stage-wrap` background so the halo looks like a canvas cutout. */
+const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
 
 type ButtonId = "front" | "rear";
 type ModuleId = ButtonId | "switch" | "extra";
@@ -594,6 +600,18 @@ function hasWireBetween(wires: Wire[], a: string, b: string) {
 }
 
 /**
+ * Builds the flat Konva points array: from → bends → to.
+ */
+function buildWireFlatPoints(from: Point, bends: Point[], to: Point): number[] {
+  const points = [from.x, from.y];
+  for (const bend of bends) {
+    points.push(bend.x, bend.y);
+  }
+  points.push(to.x, to.y);
+  return points;
+}
+
+/**
  * Ordered vertices along a wire (terminals + bends).
  */
 function wireVertices(from: Point, bends: Point[], to: Point): Point[] {
@@ -711,7 +729,7 @@ const LabLayer = memo(function LabLayer({
         color: wire.color,
         from,
         to,
-        verts: wireVertices(from, wire.bends, to),
+        points: buildWireFlatPoints(from, wire.bends, to),
       };
     })
     .filter(
@@ -723,14 +741,9 @@ const LabLayer = memo(function LabLayer({
         color: WireColor;
         from: Point;
         to: Point;
-        verts: Point[];
+        points: number[];
       } => w !== null,
     );
-
-  const jumpsByWire = findWireJumpSites(
-    renderedWires.map((wire) => ({ id: wire.id, verts: wire.verts })),
-    WIRE_TENSION,
-  );
 
   const draftFrom =
     draft !== null ? resolveTerminalWorldPos(draft.from, positions) : null;
@@ -744,27 +757,33 @@ const LabLayer = memo(function LabLayer({
     <Layer onDragEnd={onContentBoundsChange}>
       {renderedWires.map((wire) => {
         const selected = wire.id === selectedWireId;
-        const verts = wire.verts;
-        const points = wirePointsWithJumps(
-          verts,
-          WIRE_TENSION,
-          jumpsByWire.get(wire.id) ?? [],
-        );
+        const verts = wireVertices(wire.from, wire.bends, wire.to);
+        const strokeWidth = selected
+          ? WIRE_STROKE_WIDTH_SELECTED
+          : WIRE_STROKE_WIDTH;
+        const sharedLine = {
+          points: wire.points,
+          lineCap: "round" as const,
+          lineJoin: "round" as const,
+          tension: WIRE_TENSION,
+        };
         return (
           <Fragment key={wire.id}>
             <Line
+              {...sharedLine}
+              stroke={WIRE_UNDERSTROKE_COLOR}
+              strokeWidth={strokeWidth + WIRE_UNDERSTROKE_PAD}
+              listening={false}
+            />
+            <Line
               name={`wire-${wire.id}`}
-              points={points}
+              {...sharedLine}
               stroke={wireColorHex(wire.color)}
-              strokeWidth={selected ? 5 : 3}
+              strokeWidth={strokeWidth}
               hitStrokeWidth={16}
-              lineCap="round"
-              lineJoin="round"
-              shadowColor={
-                wire.color === "white" || selected ? "#64748b" : undefined
-              }
-              shadowBlur={wire.color === "white" || selected ? 2 : 0}
-              shadowOpacity={wire.color === "white" || selected ? 0.55 : 0}
+              shadowColor={wire.color === "white" ? "#64748b" : undefined}
+              shadowBlur={wire.color === "white" ? 2 : 0}
+              shadowOpacity={wire.color === "white" ? 0.55 : 0}
               {...clickCursor}
               onClick={(e) => {
                 e.cancelBubble = true;
