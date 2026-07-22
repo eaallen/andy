@@ -1,9 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-import { Layer, Line, Stage } from "react-konva";
+import { Circle, Layer, Line, Stage } from "react-konva";
 import { AppCtxProvider } from "./appCtx";
 import { DoorbellButton, DOORBELL_SIZE } from "./comps/DoorbellButton";
 import { Switch, SWITCH_SIZE } from "./comps/Switch";
@@ -27,6 +27,10 @@ const PINCH_ZOOM_INTENSITY = 0.01;
 const EDGE_MARGIN = 72;
 /** Pointer travel (stage px) before a terminal press counts as a wire drag. */
 const WIRE_DRAG_THRESHOLD = 6;
+/** Radius of bend / midpoint handles on a selected wire. */
+const BEND_HANDLE_RADIUS = 6;
+/** Spline tension for wire polylines (0 = sharp corners, higher = curvier). */
+const WIRE_TENSION = 0.4;
 
 type ButtonId = "front" | "rear";
 type ModuleId = ButtonId | "switch" | "extra";
@@ -61,6 +65,8 @@ type Wire = {
   id: string;
   from: string;
   to: string;
+  /** World-space bend points between the two terminals. */
+  bends: Point[];
 };
 
 type WireDraft =
@@ -267,6 +273,78 @@ function hasWireBetween(wires: Wire[], a: string, b: string) {
   return wires.some((w) => wirePairKey(w.from, w.to) === pair);
 }
 
+/**
+ * Builds the flat Konva points array: from → bends → to.
+ */
+function buildWireFlatPoints(from: Point, bends: Point[], to: Point): number[] {
+  const points = [from.x, from.y];
+  for (const bend of bends) {
+    points.push(bend.x, bend.y);
+  }
+  points.push(to.x, to.y);
+  return points;
+}
+
+/**
+ * Ordered vertices along a wire (terminals + bends).
+ */
+function wireVertices(from: Point, bends: Point[], to: Point): Point[] {
+  return [from, ...bends, to];
+}
+
+/**
+ * Squared distance from a point to a line segment.
+ */
+function distToSegmentSq(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (dx === 0 && dy === 0) {
+    const ex = px - x1;
+    const ey = py - y1;
+    return ex * ex + ey * ey;
+  }
+  const t = Math.max(
+    0,
+    Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)),
+  );
+  const projX = x1 + t * dx;
+  const projY = y1 + t * dy;
+  const ex = px - projX;
+  const ey = py - projY;
+  return ex * ex + ey * ey;
+}
+
+/**
+ * Finds which polyline segment is closest to a world point (bend insert index).
+ */
+function findClosestSegmentIndex(
+  from: Point,
+  bends: Point[],
+  to: Point,
+  point: Point,
+) {
+  const verts = wireVertices(from, bends, to);
+  let bestIndex = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < verts.length - 1; i += 1) {
+    const a = verts[i];
+    const b = verts[i + 1];
+    const dist = distToSegmentSq(point.x, point.y, a.x, a.y, b.x, b.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
 type LabLayerProps = {
   pressed: PressedState;
   positions: Record<ModuleId, Point>;
@@ -277,6 +355,17 @@ type LabLayerProps = {
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
   onWireSelect: (id: string) => void;
+  onWireAddBend: (
+    id: string,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
+  onBendMove: (id: string, bendIndex: number, x: number, y: number) => void;
+  onBendRemove: (id: string, bendIndex: number) => void;
+  onMidpointPointerDown: (
+    id: string,
+    segmentIndex: number,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
   onContentBoundsChange: () => void;
 };
 
@@ -294,16 +383,36 @@ const LabLayer = memo(function LabLayer({
   onModuleDragMove,
   onModuleDragEnd,
   onWireSelect,
+  onWireAddBend,
+  onBendMove,
+  onBendRemove,
+  onMidpointPointerDown,
   onContentBoundsChange,
 }: LabLayerProps) {
-  const wirePoints = wires
+  const renderedWires = wires
     .map((wire) => {
       const from = resolveTerminalWorldPos(wire.from, positions);
       const to = resolveTerminalWorldPos(wire.to, positions);
       if (!from || !to) return null;
-      return { id: wire.id, points: [from.x, from.y, to.x, to.y] };
+      return {
+        id: wire.id,
+        bends: wire.bends,
+        from,
+        to,
+        points: buildWireFlatPoints(from, wire.bends, to),
+      };
     })
-    .filter((w): w is { id: string; points: number[] } => w !== null);
+    .filter(
+      (
+        w,
+      ): w is {
+        id: string;
+        bends: Point[];
+        from: Point;
+        to: Point;
+        points: number[];
+      } => w !== null,
+    );
 
   const draftFrom =
     draft !== null ? resolveTerminalWorldPos(draft.from, positions) : null;
@@ -314,27 +423,105 @@ const LabLayer = memo(function LabLayer({
 
   return (
     <Layer onDragEnd={onContentBoundsChange}>
-      {wirePoints.map((wire) => {
+      {renderedWires.map((wire) => {
         const selected = wire.id === selectedWireId;
+        const verts = wireVertices(wire.from, wire.bends, wire.to);
         return (
-          <Line
-            key={wire.id}
-            name={`wire-${wire.id}`}
-            points={wire.points}
-            stroke={selected ? "#2563eb" : "#334155"}
-            strokeWidth={selected ? 5 : 3}
-            hitStrokeWidth={16}
-            lineCap="round"
-            lineJoin="round"
-            onClick={(e) => {
-              e.cancelBubble = true;
-              onWireSelect(wire.id);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              onWireSelect(wire.id);
-            }}
-          />
+          <Fragment key={wire.id}>
+            <Line
+              name={`wire-${wire.id}`}
+              points={wire.points}
+              stroke={selected ? "#2563eb" : "#334155"}
+              strokeWidth={selected ? 5 : 3}
+              hitStrokeWidth={16}
+              lineCap="round"
+              lineJoin="round"
+              tension={WIRE_TENSION}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                onWireSelect(wire.id);
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                onWireSelect(wire.id);
+              }}
+              onDblClick={(e) => {
+                e.cancelBubble = true;
+                onWireAddBend(wire.id, e);
+              }}
+              onDblTap={(e) => {
+                e.cancelBubble = true;
+                onWireAddBend(wire.id, e);
+              }}
+            />
+            {selected
+              ? verts.slice(0, -1).map((start, segmentIndex) => {
+                  const end = verts[segmentIndex + 1];
+                  const mid = {
+                    x: (start.x + end.x) / 2,
+                    y: (start.y + end.y) / 2,
+                  };
+                  return (
+                    <Circle
+                      key={`${wire.id}-mid-${segmentIndex}`}
+                      name="bend-midpoint"
+                      x={mid.x}
+                      y={mid.y}
+                      radius={BEND_HANDLE_RADIUS - 1}
+                      fill="#dbeafe"
+                      stroke="#93c5fd"
+                      strokeWidth={1.5}
+                      opacity={0.9}
+                      onMouseDown={(e) => {
+                        e.cancelBubble = true;
+                        onMidpointPointerDown(wire.id, segmentIndex, e);
+                      }}
+                      onTouchStart={(e) => {
+                        e.cancelBubble = true;
+                        onMidpointPointerDown(wire.id, segmentIndex, e);
+                      }}
+                    />
+                  );
+                })
+              : null}
+            {selected
+              ? wire.bends.map((bend, bendIndex) => (
+                  <Circle
+                    key={`${wire.id}-bend-${bendIndex}`}
+                    name="bend-handle"
+                    x={bend.x}
+                    y={bend.y}
+                    radius={BEND_HANDLE_RADIUS}
+                    fill="#ffffff"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    draggable
+                    onMouseDown={(e) => {
+                      e.cancelBubble = true;
+                    }}
+                    onTouchStart={(e) => {
+                      e.cancelBubble = true;
+                    }}
+                    onDragMove={(e) => {
+                      onBendMove(
+                        wire.id,
+                        bendIndex,
+                        e.target.x(),
+                        e.target.y(),
+                      );
+                    }}
+                    onDblClick={(e) => {
+                      e.cancelBubble = true;
+                      onBendRemove(wire.id, bendIndex);
+                    }}
+                    onDblTap={(e) => {
+                      e.cancelBubble = true;
+                      onBendRemove(wire.id, bendIndex);
+                    }}
+                  />
+                ))
+              : null}
+          </Fragment>
         );
       })}
       {draftPoints ? (
@@ -399,6 +586,7 @@ export function App() {
   const viewRef = useRef(INITIAL_VIEW);
   const gestureRef = useRef<WireGesture | null>(null);
   const draftRef = useRef<WireDraft | null>(null);
+  const positionsRef = useRef(INITIAL_POSITIONS);
   const [size, setSize] = useState<StageSize>({ width: 0, height: 0 });
   const [pressed, setPressed] = useState<PressedState>({
     front: false,
@@ -417,6 +605,7 @@ export function App() {
   contentBoundsRef.current = contentBounds;
   viewRef.current = view;
   draftRef.current = draft;
+  positionsRef.current = positions;
 
   const pendingTerminalId =
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
@@ -489,7 +678,7 @@ export function App() {
       return "Drop on a terminal to connect";
     }
     if (selectedWireId) {
-      return "Wire selected — Delete to remove, Esc to deselect";
+      return "Wire selected — drag nodes to reshape · dbl-click adds · Delete removes";
     }
     const active = Object.entries(pressed)
       .filter(([, isDown]) => isDown)
@@ -546,6 +735,7 @@ export function App() {
           id: `wire-${from}-${to}-${prev.length}`,
           from,
           to,
+          bends: [],
         },
       ];
     });
@@ -559,6 +749,144 @@ export function App() {
     gestureRef.current = null;
     setSelectedWireId(id);
   }, []);
+
+  /**
+   * Moves one bend point on a wire (while dragging a handle).
+   */
+  const handleBendMove = useCallback(
+    (id: string, bendIndex: number, x: number, y: number) => {
+      setWires((prev) =>
+        prev.map((wire) => {
+          if (wire.id !== id) return wire;
+          if (bendIndex < 0 || bendIndex >= wire.bends.length) return wire;
+          const bends = wire.bends.map((bend, i) =>
+            i === bendIndex ? { x, y } : bend,
+          );
+          return { ...wire, bends };
+        }),
+      );
+    },
+    [],
+  );
+
+  /**
+   * Removes a bend point (double-click handle).
+   */
+  const handleBendRemove = useCallback((id: string, bendIndex: number) => {
+    setWires((prev) =>
+      prev.map((wire) => {
+        if (wire.id !== id) return wire;
+        if (bendIndex < 0 || bendIndex >= wire.bends.length) return wire;
+        return {
+          ...wire,
+          bends: wire.bends.filter((_, i) => i !== bendIndex),
+        };
+      }),
+    );
+  }, []);
+
+  /**
+   * Inserts a bend on the closest segment at the pointer (double-click wire).
+   */
+  const handleWireAddBend = useCallback(
+    (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      const stage = e.target.getStage();
+      const pointer = stage?.getPointerPosition();
+      if (!pointer) return;
+      const world = pointerToWorld(pointer, viewRef.current);
+
+      setWires((prev) =>
+        prev.map((wire) => {
+          if (wire.id !== id) return wire;
+          const from = resolveTerminalWorldPos(wire.from, positionsRef.current);
+          const to = resolveTerminalWorldPos(wire.to, positionsRef.current);
+          if (!from || !to) return wire;
+          const segmentIndex = findClosestSegmentIndex(
+            from,
+            wire.bends,
+            to,
+            world,
+          );
+          const bends = [...wire.bends];
+          bends.splice(segmentIndex, 0, world);
+          return { ...wire, bends };
+        }),
+      );
+      setSelectedWireId(id);
+    },
+    [],
+  );
+
+  /**
+   * Starts a drag from a mid-segment handle: after a short move, inserts a bend
+   * and tracks it until pointer up (avoids remounting mid-drag).
+   */
+  const handleMidpointPointerDown = useCallback(
+    (
+      id: string,
+      segmentIndex: number,
+      e: KonvaEventObject<MouseEvent | TouchEvent>,
+    ) => {
+      const maybeStage = e.target.getStage();
+      if (!maybeStage) return;
+      const stageNode: KonvaStage = maybeStage;
+      const startPointer = stageNode.getPointerPosition();
+      if (!startPointer) return;
+      const start = { x: startPointer.x, y: startPointer.y };
+
+      let inserted = false;
+      const bendIndex = segmentIndex;
+
+      /**
+       * Inserts the bend once the pointer moves, then updates its position.
+       */
+      function onMove() {
+        const pos = stageNode.getPointerPosition();
+        if (!pos) return;
+        const world = pointerToWorld(pos, viewRef.current);
+
+        if (!inserted) {
+          const dx = pos.x - start.x;
+          const dy = pos.y - start.y;
+          if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+            return;
+          }
+          inserted = true;
+          setWires((prev) =>
+            prev.map((wire) => {
+              if (wire.id !== id) return wire;
+              const bends = [...wire.bends];
+              bends.splice(segmentIndex, 0, world);
+              return { ...wire, bends };
+            }),
+          );
+          return;
+        }
+
+        setWires((prev) =>
+          prev.map((wire) => {
+            if (wire.id !== id) return wire;
+            if (bendIndex < 0 || bendIndex >= wire.bends.length) return wire;
+            const bends = wire.bends.map((bend, i) =>
+              i === bendIndex ? world : bend,
+            );
+            return { ...wire, bends };
+          }),
+        );
+      }
+
+      /**
+       * Ends the mid-segment bend gesture.
+       */
+      function onUp() {
+        stageNode.off(".bendGesture");
+      }
+
+      stageNode.on("mousemove.bendGesture touchmove.bendGesture", onMove);
+      stageNode.on("mouseup.bendGesture touchend.bendGesture", onUp);
+    },
+    [],
+  );
 
   /**
    * Starts a click-or-drag wire gesture from a terminal.
@@ -822,6 +1150,10 @@ export function App() {
                 onModuleDragMove={handleModuleDragMove}
                 onModuleDragEnd={handleModuleDragEnd}
                 onWireSelect={handleWireSelect}
+                onWireAddBend={handleWireAddBend}
+                onBendMove={handleBendMove}
+                onBendRemove={handleBendRemove}
+                onMidpointPointerDown={handleMidpointPointerDown}
                 onContentBoundsChange={syncContentBounds}
               />
             </Stage>
