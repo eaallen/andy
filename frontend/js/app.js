@@ -1,11 +1,12 @@
 import Konva from "konva";
 import { applyDoorbellButtonVisual } from "./components/button.js";
-import { COMPONENT_TYPES, WIRE_COLORS } from "./components/constants.js";
+import { COMPONENT_TYPES, DEFAULT_WIRE_COLOR, WIRE_COLORS } from "./components/constants.js";
 import { applyLampVisual } from "./components/lamp.js";
 import { createLayoutFromConfig } from "./components/registry.js";
 import { findTerminal } from "./components/shared.js";
 import { applySwitchVisual } from "./components/switch-shared.js";
-import { createWireManager } from "./wires.js";
+import { createWireManager, WIRE_DRAG_THRESHOLD } from "./wires.js";
+import { createWireMenu } from "./wire-menu.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
 import { createGrader } from "./grade.js";
@@ -20,6 +21,8 @@ import {
   boundsFromClientRect,
   clampView,
   normalizeWheelDeltas,
+  pointerToWorld,
+  worldToPointer,
   zoomAt,
 } from "./canvas-nav.js";
 
@@ -30,7 +33,7 @@ import {
  */
 export function bootCircuitLab(host, config) {
   let mode = "demo";
-  let wireColor = "red";
+  let wireColor = DEFAULT_WIRE_COLOR;
   let components = null;
   let testingSequence = false;
   /** @type {Array<object>|null} */
@@ -46,7 +49,6 @@ export function bootCircuitLab(host, config) {
   const btnTest = uiRoot.querySelector("[data-lab-action=\"test\"]");
   const btnCheck = uiRoot.querySelector("[data-lab-action=\"check\"]");
   const btnUndo = uiRoot.querySelector("[data-lab-action=\"undo\"]");
-  const wireColorGroup = uiRoot.querySelector("[data-lab-wire-colors]");
   const stageWrap = uiRoot.querySelector("[data-lab-stage-wrap]");
   const stageContainer = uiRoot.querySelector("[data-lab-stage]");
   const titleEl = uiRoot.querySelector("[data-lab-title]");
@@ -133,6 +135,7 @@ export function bootCircuitLab(host, config) {
     view = clampView(next, viewportSize(), contentBounds);
     applyViewToStage(stage, view);
     syncZoomLabel();
+    syncWireMenuPosition();
     stage.batchDraw();
   }
 
@@ -308,10 +311,120 @@ export function bootCircuitLab(host, config) {
     btnUndo.disabled = !canUndo;
   }
 
+  /**
+   * Walks up from a Konva node to find its terminal metadata.
+   * @param {Konva.Node|null} node - Hit node from the stage.
+   */
+  function findTerminalFromNode(node) {
+    let current = node;
+    while (current) {
+      const list = componentList();
+      for (let i = 0; i < list.length; i += 1) {
+        const group = list[i];
+        if (!group || !group.terminals) {
+          continue;
+        }
+        for (let t = 0; t < group.terminals.length; t += 1) {
+          const terminal = group.terminals[t];
+          if (terminal.node === current || terminal.handle === current) {
+            return terminal;
+          }
+        }
+      }
+      current = typeof current.getParent === "function" ? current.getParent() : null;
+    }
+    return null;
+  }
+
+  /**
+   * Repositions the floating wire menu after pan/zoom.
+   */
+  function syncWireMenuPosition() {
+    if (!wireMenu || !stageWrap) {
+      return;
+    }
+    wireMenu.syncPosition(
+      function (world) {
+        return worldToPointer(world, view);
+      },
+      { width: stageWrap.clientWidth, height: stageWrap.clientHeight }
+    );
+  }
+
+  /**
+   * Opens or closes the floating wire menu from a selection change.
+   * Demo reference wires stay bendable but skip the actions menu.
+   * @param {object|null} wire - Selected wire, or null.
+   * @param {{ x: number; y: number }|null} worldPos - Menu anchor in layer space.
+   */
+  function handleWireSelectionChange(wire, worldPos) {
+    if (!wireMenu || !stageWrap) {
+      return;
+    }
+    if (!wire) {
+      wireMenu.close();
+      return;
+    }
+    if (wire.selectable === false) {
+      wireMenu.close();
+      return;
+    }
+    // Bend-handle reselects without a click point — keep menu closed / update color only.
+    if (!worldPos) {
+      if (wireMenu.isOpen()) {
+        wireMenu.setColor(
+          wire.colorKey,
+          function (world) {
+            return worldToPointer(world, view);
+          },
+          { width: stageWrap.clientWidth, height: stageWrap.clientHeight }
+        );
+      }
+      return;
+    }
+    // Click-away / toggle: if menu is open (or just dismissed), close instead of reopen.
+    if (wireMenu.shouldSuppressOpen()) {
+      wireMenu.close();
+      return;
+    }
+    wireMenu.open({
+      colorKey: wire.colorKey,
+      canDelete: true,
+      world: worldPos,
+      screen: worldToPointer(worldPos, view),
+      viewport: {
+        width: stageWrap.clientWidth,
+        height: stageWrap.clientHeight,
+      },
+    });
+  }
+
+  const wireMenu = stageWrap
+    ? createWireMenu(stageWrap, {
+        onDelete: function () {
+          wireManager.removeSelectedWire();
+          wireMenu.close();
+        },
+        onPickColor: function (colorKey) {
+          const selected = wireManager.getSelectedWire();
+          if (selected) {
+            wireManager.setWireColorKey(selected, colorKey);
+          }
+          setWireColor(colorKey);
+          syncWireMenuPosition();
+        },
+        onDismiss: function () {
+          wireMenu.close();
+        },
+      })
+    : null;
+
   const wireManager = createWireManager(wireLayer, {
     resolveTerminal: resolveTerminal,
+    findTerminalFromNode: findTerminalFromNode,
     onHistoryChange: syncUndoButton,
     onChange: handleWiresChanged,
+    onSelectionChange: handleWireSelectionChange,
   });
 
   /**
@@ -501,6 +614,9 @@ export function bootCircuitLab(host, config) {
     } else {
       showLabCircuit();
     }
+    if (wireMenu) {
+      wireMenu.close();
+    }
   }
 
   /**
@@ -561,39 +677,118 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Binds slide + click handling on a terminal.
+   * Adopts a terminal's suggested color when it is in the wire palette.
+   * @param {object} terminal - Terminal metadata.
+   */
+  function maybeAdoptTerminalColor(terminal) {
+    const color = terminal.wireColor;
+    if (color && WIRE_COLORS[color]) {
+      setWireColor(color);
+    }
+  }
+
+  /**
+   * Lab click-or-drag wire gesture: tap to pending/connect, drag for rubber-band.
+   * @param {object} terminal - Terminal metadata.
+   * @param {Konva.KonvaEventObject} evt - Pointer down event.
+   */
+  function handleTerminalPointerDown(terminal, evt) {
+    evt.cancelBubble = true;
+    if (evt.evt && evt.evt.preventDefault) {
+      evt.evt.preventDefault();
+    }
+
+    if (mode !== "lab") {
+      return;
+    }
+
+    const group = terminal.componentGroup;
+    const startPointer = stage.getPointerPosition();
+    if (!startPointer) {
+      return;
+    }
+
+    let dragging = false;
+    group.draggable(false);
+    if (typeof group.stopDrag === "function") {
+      group.stopDrag();
+    }
+
+    /**
+     * Starts a rubber-band once the pointer moves past the drag threshold.
+     * @param {Konva.KonvaEventObject} moveEvt - Move event.
+     */
+    function onMove(moveEvt) {
+      moveEvt.evt.preventDefault();
+      const pos = stage.getPointerPosition();
+      if (!pos) {
+        return;
+      }
+      const dx = pos.x - startPointer.x;
+      const dy = pos.y - startPointer.y;
+
+      if (!dragging) {
+        if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+          return;
+        }
+        dragging = true;
+        if (wireMenu) {
+          wireMenu.close();
+        }
+        wireManager.clearWireSelection();
+        wireManager.clearPendingHighlight();
+        maybeAdoptTerminalColor(terminal);
+        stage.container().style.cursor = "crosshair";
+      }
+
+      const world = pointerToWorld(pos, view);
+      wireManager.setDraftDrag(terminal, world);
+    }
+
+    /**
+     * Completes drag-connect or tap pending/connect.
+     */
+    function onUp() {
+      stage.off(".terminalWire");
+      group.draggable(true);
+      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+
+      if (dragging) {
+        wireManager.completeDragConnect(terminal, stage, wireColor);
+        return;
+      }
+
+      // Tap: pending / complete two-click connect.
+      if (wireMenu) {
+        wireMenu.close();
+      }
+      wireManager.clearWireSelection();
+      if (!wireManager.hasPendingTerminal()) {
+        maybeAdoptTerminalColor(terminal);
+      }
+      wireManager.handleTerminalClick(terminal, wireColor, true);
+    }
+
+    stage.on("mousemove.terminalWire touchmove.terminalWire", onMove);
+    stage.on("mouseup.terminalWire touchend.terminalWire", onUp);
+  }
+
+  /**
+   * Binds wire gesture handling on a terminal.
    * @param {object} terminal - Terminal metadata.
    */
   function bindTerminal(terminal) {
     const handle = terminal.handle || terminal.node;
 
-    handle.on("terminalslide", function () {
-      wireManager.updateWirePositions();
-    });
-
-    handle.on("click tap", function (evt) {
-      evt.cancelBubble = true;
-      if (terminal.didSlide) {
-        terminal.didSlide = false;
-        return;
-      }
-      wireManager.clearWireSelection();
-      if (mode === "lab") {
-        if (!wireManager.hasPendingTerminal()) {
-          const color = terminal.wireColor;
-          if (color && wireColorGroup.querySelector('[data-color="' + color + '"]')) {
-            setWireColor(color);
-          }
-        }
-        wireManager.handleTerminalClick(terminal, wireColor, true);
-      }
-    });
+    terminal.onPointerDown = function (evt) {
+      handleTerminalPointerDown(terminal, evt);
+    };
 
     handle.on("mouseenter", function () {
-      stage.container().style.cursor = mode === "lab" ? "crosshair" : "grab";
+      stage.container().style.cursor = mode === "lab" ? "crosshair" : STAGE_DEFAULT_CURSOR;
     });
     handle.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
+      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
     });
   }
 
@@ -754,28 +949,17 @@ export function bootCircuitLab(host, config) {
     modeLabBtn.classList.toggle("active", !isDemo);
     modeDemoBtn.setAttribute("aria-pressed", isDemo ? "true" : "false");
     modeLabBtn.setAttribute("aria-pressed", isDemo ? "false" : "true");
-
-    const swatches = wireColorGroup.querySelectorAll(".wire-swatch");
-    for (let i = 0; i < swatches.length; i += 1) {
-      swatches[i].disabled = isDemo;
-    }
   }
 
   /**
-   * Updates the active wire color swatch.
-   * @param {string} colorKey - red, gray, blue, or green.
+   * Remembers the active wire color for new wires.
+   * @param {string} colorKey - Color key in WIRE_COLORS.
    */
   function setWireColor(colorKey) {
     if (!WIRE_COLORS[colorKey]) {
       return;
     }
     wireColor = colorKey;
-    const swatches = wireColorGroup.querySelectorAll(".wire-swatch");
-    for (let i = 0; i < swatches.length; i += 1) {
-      const active = swatches[i].getAttribute("data-color") === colorKey;
-      swatches[i].classList.toggle("active", active);
-      swatches[i].setAttribute("aria-pressed", active ? "true" : "false");
-    }
   }
 
   /**
@@ -896,17 +1080,6 @@ export function bootCircuitLab(host, config) {
   btnTest.addEventListener("click", runTestSequence);
   btnCheck.addEventListener("click", runCheck);
   btnUndo.addEventListener("click", runUndo);
-
-  wireColorGroup.addEventListener("click", function (evt) {
-    const target = evt.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    const color = target.getAttribute("data-color");
-    if (color && mode === "lab") {
-      setWireColor(color);
-    }
-  });
 
   if (zoomOutBtn) {
     zoomOutBtn.addEventListener("click", function () {
@@ -1078,7 +1251,7 @@ export function bootCircuitLab(host, config) {
   window.addEventListener("resize", handleResize);
 
   syncModeButtons();
-  setWireColor("red");
+  setWireColor(DEFAULT_WIRE_COLOR);
   syncZoomLabel();
   ensureComponents();
   showDemoCircuit();

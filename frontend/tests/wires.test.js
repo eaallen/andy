@@ -1,0 +1,91 @@
+import { afterEach, describe, expect, it } from "vitest";
+import Konva from "konva";
+import { createWireManager } from "../js/wires.js";
+import { WIRE_TENSION } from "../js/wire-path.js";
+
+describe("createWireManager", () => {
+  /** @type {Konva.Stage[]} */
+  const stages = [];
+
+  afterEach(() => {
+    while (stages.length > 0) {
+      const stage = stages.pop();
+      stage.destroy();
+    }
+  });
+
+  /**
+   * Builds a stage with two fake terminals for wire tests.
+   */
+  function makeHarness() {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const stage = new Konva.Stage({
+      container: container,
+      width: 400,
+      height: 300,
+    });
+    stages.push(stage);
+    const layer = new Konva.Layer();
+    stage.add(layer);
+
+    /**
+     * Creates a minimal terminal-like object.
+     * @param {string} componentId - Component id.
+     * @param {string} id - Terminal id.
+     * @param {number} x - World x.
+     * @param {number} y - World y.
+     */
+    function makeTerminal(componentId, id, x, y) {
+      const group = new Konva.Group({ x: 0, y: 0 });
+      group.componentId = componentId;
+      const handle = new Konva.Group({ x: x, y: y });
+      const node = new Konva.Circle({ x: 0, y: 0, radius: 6 });
+      handle.add(node);
+      group.add(handle);
+      layer.add(group);
+      return {
+        id: id,
+        node: node,
+        handle: handle,
+        componentGroup: group,
+      };
+    }
+
+    const a = makeTerminal("power", "hot", 40, 40);
+    const b = makeTerminal("lamp", "load", 200, 40);
+    const manager = createWireManager(layer, {});
+    stage.draw();
+    return { stage: stage, layer: layer, a: a, b: b, manager: manager };
+  }
+
+  it("connects terminals once and rejects duplicates", () => {
+    const harness = makeHarness();
+    const first = harness.manager.connectTerminals(harness.a, harness.b, "red");
+    const second = harness.manager.connectTerminals(harness.a, harness.b, "blue");
+    expect(first).toBeTruthy();
+    expect(second).toBeNull();
+    expect(harness.manager.getWires()).toHaveLength(1);
+    expect(harness.manager.hasWireBetween(harness.a, harness.b)).toBe(true);
+  });
+
+  it("draws tensioned solid wires with an understroke halo", () => {
+    const harness = makeHarness();
+    const wire = harness.manager.connectTerminals(harness.a, harness.b, "gray");
+    expect(wire.line.tension()).toBe(WIRE_TENSION);
+    expect(wire.line.dash() || []).toEqual([]);
+    expect(wire.understroke).toBeTruthy();
+    expect(wire.understroke.listening()).toBe(false);
+    expect(wire.understroke.strokeWidth()).toBeGreaterThan(wire.line.strokeWidth());
+  });
+
+  it("updates wire color and remembers selection stroke", () => {
+    const harness = makeHarness();
+    const wire = harness.manager.connectTerminals(harness.a, harness.b, "red");
+    harness.manager.selectWire(wire, { x: 100, y: 40 });
+    harness.manager.setWireColorKey(wire, "green");
+    expect(wire.colorKey).toBe("green");
+    expect(wire.line.stroke()).toBe("#16a34a");
+    expect(wire.line.strokeWidth()).toBe(5);
+  });
+});

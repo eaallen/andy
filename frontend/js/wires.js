@@ -1,29 +1,43 @@
 import Konva from "konva";
 import { WIRE_COLORS } from "./components/constants.js";
 import { getTerminalComponentGroup, getTerminalPosition } from "./components/shared.js";
+import {
+  WIRE_TENSION,
+  findClosestSegmentIndex,
+  wireSegmentMidpoints,
+} from "./wire-path.js";
 
-/** Dash patterns for same-color wires (first is solid). */
-const WIRE_DASH_PATTERNS = [
-  [],
-  [14, 8],
-  [3, 6],
-  [14, 6, 3, 6],
-  [14, 6, 3, 6, 3, 6],
-  [8, 5],
-  [3, 6, 3, 6, 14, 6],
-  [2, 5],
-];
+/** Colored stroke width for an unselected wire. */
+const WIRE_STROKE_WIDTH = 3;
+/** Colored stroke width for the selected wire. */
+const WIRE_STROKE_WIDTH_SELECTED = 5;
+/** Extra width added under the colored stroke so crossings stay readable. */
+const WIRE_UNDERSTROKE_PAD = 5;
+/** Matches `.lab-stage-wrap` background so the halo looks like a canvas cutout. */
+const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
+/** Radius of bend handles on a selected wire. */
+const BEND_HANDLE_RADIUS = 6;
+/** Pointer travel (stage px) before a mid-handle press inserts a bend. */
+export const WIRE_DRAG_THRESHOLD = 6;
 
 /**
  * Manages terminal-to-terminal wires on a Konva layer, with bend points and undo.
  * @param {Konva.Layer} layer - Layer that holds wire lines.
- * @param {{ onChange?: () => void, onHistoryChange?: (canUndo: boolean) => void, resolveTerminal?: (key: string) => object|null }} [options] - Manager options.
+ * @param {{
+ *   onChange?: () => void,
+ *   onHistoryChange?: (canUndo: boolean) => void,
+ *   onSelectionChange?: (wire: object|null, worldPos: {x:number,y:number}|null) => void,
+ *   resolveTerminal?: (key: string) => object|null,
+ *   findTerminalFromNode?: (node: Konva.Node) => object|null,
+ * }} [options] - Manager options.
  */
 export function createWireManager(layer, options) {
   const opts = typeof options === "function" ? { onChange: options } : options || {};
   const onChange = opts.onChange;
   const onHistoryChange = opts.onHistoryChange;
+  const onSelectionChange = opts.onSelectionChange;
   const resolveTerminal = opts.resolveTerminal;
+  const findTerminalFromNode = opts.findTerminalFromNode;
 
   const wires = [];
   const history = [];
@@ -31,6 +45,8 @@ export function createWireManager(layer, options) {
   let selectedWire = null;
   let pendingTerminal = null;
   let restoring = false;
+  /** @type {Konva.Line|null} */
+  let draftLine = null;
 
   /**
    * Notifies listeners that the wire list changed.
@@ -51,12 +67,44 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Notifies listeners that the selected wire changed.
+   * @param {object|null} wire - Selected wire, or null.
+   * @param {{ x: number; y: number }|null} [worldPos] - Menu anchor in layer space.
+   */
+  function notifySelectionChange(wire, worldPos) {
+    if (typeof onSelectionChange === "function") {
+      onSelectionChange(wire, worldPos || null);
+    }
+  }
+
+  /**
    * Builds a stable key for a terminal (component id + terminal id).
    * @param {{ node: Konva.Circle, id: string, componentGroup?: Konva.Group }} terminal - Terminal metadata.
    */
   function terminalKey(terminal) {
     const group = getTerminalComponentGroup(terminal);
     return (group && group.componentId ? group.componentId : "unknown") + ":" + terminal.id;
+  }
+
+  /**
+   * Returns whether two terminals are already connected.
+   * @param {object} a - First terminal.
+   * @param {object} b - Second terminal.
+   */
+  function hasWireBetween(a, b) {
+    const keyA = terminalKey(a);
+    const keyB = terminalKey(b);
+    for (let i = 0; i < wires.length; i += 1) {
+      const fromKey = terminalKey(wires[i].from);
+      const toKey = terminalKey(wires[i].to);
+      if (
+        (fromKey === keyA && toKey === keyB) ||
+        (fromKey === keyB && toKey === keyA)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -182,6 +230,7 @@ export function createWireManager(layer, options) {
       pendingTerminal.node.strokeWidth(2);
     }
     pendingTerminal = null;
+    clearDraft();
   }
 
   /**
@@ -196,100 +245,268 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Builds vertex list for a wire in layer space.
+   * @param {object} wire - Wire record.
+   */
+  function wireVertices(wire) {
+    const fromPos = getTerminalPosition(wire.from, layer);
+    const toPos = getTerminalPosition(wire.to, layer);
+    return [fromPos].concat(wire.bends, [toPos]);
+  }
+
+  /**
    * Builds the flat points array for a wire from terminals and bends.
    * @param {object} wire - Wire record.
    */
   function buildPoints(wire) {
-    const fromPos = getTerminalPosition(wire.from, layer);
-    const toPos = getTerminalPosition(wire.to, layer);
-    const points = [fromPos.x, fromPos.y];
-    for (let i = 0; i < wire.bends.length; i += 1) {
-      points.push(wire.bends[i].x, wire.bends[i].y);
+    const verts = wireVertices(wire);
+    const points = [];
+    for (let i = 0; i < verts.length; i += 1) {
+      points.push(verts[i].x, verts[i].y);
     }
-    points.push(toPos.x, toPos.y);
     return points;
   }
 
   /**
-   * Applies current geometry to the Konva line.
+   * Applies current geometry to the Konva line (and understroke).
    * @param {object} wire - Wire record.
    */
   function refreshWireGeometry(wire) {
-    wire.line.points(buildPoints(wire));
+    const points = buildPoints(wire);
+    wire.line.points(points);
+    if (wire.understroke) {
+      wire.understroke.points(points);
+    }
   }
 
   /**
-   * Returns the dash array for a pattern index (cycles if more wires than patterns).
-   * @param {number} patternIndex - Index into WIRE_DASH_PATTERNS.
-   */
-  function dashForPatternIndex(patternIndex) {
-    const index = ((patternIndex % WIRE_DASH_PATTERNS.length) + WIRE_DASH_PATTERNS.length) % WIRE_DASH_PATTERNS.length;
-    return WIRE_DASH_PATTERNS[index].slice();
-  }
-
-  /**
-   * Applies the wire's color-pattern dash to its Konva line.
+   * Applies stroke color and selected width to a wire's lines.
    * @param {object} wire - Wire record.
+   * @param {boolean} selected - Whether the wire is selected.
    */
-  function applyWireDash(wire) {
-    if (!wire.line) {
-      return;
-    }
-    wire.line.dash(dashForPatternIndex(wire.patternIndex || 0));
-  }
-
-  /**
-   * Counts how many wires already use a given color.
-   * @param {string} colorKey - Wire color key.
-   */
-  function countWiresWithColor(colorKey) {
-    let count = 0;
-    for (let i = 0; i < wires.length; i += 1) {
-      if (wires[i].colorKey === colorKey) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  /**
-   * Reassigns dash patterns for all wires of a color (first solid, then dashes/dots).
-   * @param {string} colorKey - Wire color key.
-   */
-  function reassignPatternsForColor(colorKey) {
-    let index = 0;
-    for (let i = 0; i < wires.length; i += 1) {
-      const wire = wires[i];
-      if (wire.colorKey !== colorKey) {
-        continue;
-      }
-      wire.patternIndex = index;
-      applyWireDash(wire);
-      index += 1;
+  function applyWireStroke(wire, selected) {
+    const stroke = WIRE_COLORS[wire.colorKey] || WIRE_COLORS.black;
+    const width = selected ? WIRE_STROKE_WIDTH_SELECTED : WIRE_STROKE_WIDTH;
+    wire.line.stroke(stroke);
+    wire.line.strokeWidth(width);
+    if (wire.understroke) {
+      wire.understroke.strokeWidth(width + WIRE_UNDERSTROKE_PAD);
     }
   }
 
   /**
-   * Hides and destroys bend handle circles for a wire.
+   * Removes the rubber-band draft line if present.
+   */
+  function clearDraft() {
+    if (draftLine) {
+      draftLine.destroy();
+      draftLine = null;
+      layer.batchDraw();
+    }
+  }
+
+  /**
+   * Shows or updates the ethereal rubber-band from a terminal to a pointer.
+   * @param {object} fromTerminal - Start terminal.
+   * @param {{ x: number; y: number }} pointer - Layer-space pointer.
+   */
+  function setDraftDrag(fromTerminal, pointer) {
+    const fromPos = getTerminalPosition(fromTerminal, layer);
+    const points = [fromPos.x, fromPos.y, pointer.x, pointer.y];
+    if (!draftLine) {
+      draftLine = new Konva.Line({
+        points: points,
+        stroke: "#c4b5fd",
+        strokeWidth: 2,
+        dash: [4, 10],
+        opacity: 0.7,
+        lineCap: "round",
+        shadowColor: "#a78bfa",
+        shadowBlur: 18,
+        shadowOpacity: 0.95,
+        listening: false,
+        name: "wire-draft",
+      });
+      layer.add(draftLine);
+    } else {
+      draftLine.points(points);
+    }
+    draftLine.moveToTop();
+    layer.batchDraw();
+  }
+
+  /**
+   * Hides and destroys bend / midpoint handles for a wire.
    * @param {object} wire - Wire record.
    */
   function destroyBendHandles(wire) {
-    if (!wire.handles) {
-      return;
+    if (wire.handles) {
+      for (let i = 0; i < wire.handles.length; i += 1) {
+        wire.handles[i].destroy();
+      }
     }
-    for (let i = 0; i < wire.handles.length; i += 1) {
-      wire.handles[i].destroy();
+    if (wire.midHandles) {
+      for (let i = 0; i < wire.midHandles.length; i += 1) {
+        wire.midHandles[i].destroy();
+      }
     }
     wire.handles = [];
+    wire.midHandles = [];
   }
 
   /**
-   * Shows draggable bend handles for the selected wire.
+   * Destroys only midpoint handles (keeps bend handles during a bend drag).
+   * @param {object} wire - Wire record.
+   */
+  function destroyMidHandles(wire) {
+    if (wire.midHandles) {
+      for (let i = 0; i < wire.midHandles.length; i += 1) {
+        wire.midHandles[i].destroy();
+      }
+    }
+    wire.midHandles = [];
+  }
+
+  /**
+   * Rebuilds midpoint handles to follow the current tensioned path.
+   * @param {object} wire - Wire record.
+   */
+  function refreshMidpointHandles(wire) {
+    destroyMidHandles(wire);
+    wire.midHandles = [];
+    const verts = wireVertices(wire);
+    const mids = wireSegmentMidpoints(verts, WIRE_TENSION);
+    for (let i = 0; i < mids.length; i += 1) {
+      (function (segmentIndex) {
+        const mid = mids[segmentIndex];
+        const handle = new Konva.Circle({
+          x: mid.x,
+          y: mid.y,
+          radius: BEND_HANDLE_RADIUS - 1,
+          fill: "#dbeafe",
+          stroke: "#93c5fd",
+          strokeWidth: 1.5,
+          opacity: 0.9,
+          name: "bend-midpoint",
+        });
+        handle.on("mousedown touchstart", function (evt) {
+          beginMidpointDrag(wire, segmentIndex, evt);
+        });
+        handle.on("click tap", function (evt) {
+          evt.cancelBubble = true;
+        });
+        layer.add(handle);
+        wire.midHandles.push(handle);
+      })(i);
+    }
+  }
+
+  /**
+   * Starts a mid-segment drag that inserts a bend after a short move.
+   * @param {object} wire - Wire record.
+   * @param {number} segmentIndex - Segment index for the new bend.
+   * @param {Konva.KonvaEventObject} e - Pointer down event.
+   */
+  function beginMidpointDrag(wire, segmentIndex, e) {
+    e.cancelBubble = true;
+    if (e.evt && e.evt.preventDefault) {
+      e.evt.preventDefault();
+    }
+    const stage = layer.getStage();
+    if (!stage) {
+      return;
+    }
+    const startPointer = stage.getPointerPosition();
+    if (!startPointer) {
+      return;
+    }
+    const start = { x: startPointer.x, y: startPointer.y };
+    let inserted = false;
+    const bendIndex = segmentIndex;
+
+    /**
+     * Inserts the bend once the pointer moves, then updates its position.
+     * @param {Konva.KonvaEventObject} evt - Move event.
+     */
+    function onMove(evt) {
+      evt.evt.preventDefault();
+      const pos = layer.getRelativePointerPosition();
+      const stagePos = stage.getPointerPosition();
+      if (!pos || !stagePos) {
+        return;
+      }
+      if (!inserted) {
+        const dx = stagePos.x - start.x;
+        const dy = stagePos.y - start.y;
+        if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+          return;
+        }
+        inserted = true;
+        pushHistory();
+        wire.bends.splice(bendIndex, 0, { x: pos.x, y: pos.y });
+        refreshWireGeometry(wire);
+        // Rebuild bend handles once; hide midpoints until pointer up.
+        destroyBendHandles(wire);
+        wire.handles = [];
+        wire.midHandles = [];
+        for (let i = 0; i < wire.bends.length; i += 1) {
+          (function (index) {
+            const bend = wire.bends[index];
+            const handle = new Konva.Circle({
+              x: bend.x,
+              y: bend.y,
+              radius: BEND_HANDLE_RADIUS,
+              fill: "#ffffff",
+              stroke: "#2563eb",
+              strokeWidth: 2,
+              name: "bend-handle",
+            });
+            layer.add(handle);
+            wire.handles.push(handle);
+          })(i);
+        }
+        notifyChange();
+        layer.batchDraw();
+        return;
+      }
+      if (bendIndex < 0 || bendIndex >= wire.bends.length) {
+        return;
+      }
+      wire.bends[bendIndex].x = pos.x;
+      wire.bends[bendIndex].y = pos.y;
+      refreshWireGeometry(wire);
+      if (wire.handles && wire.handles[bendIndex]) {
+        wire.handles[bendIndex].position(wire.bends[bendIndex]);
+      }
+      layer.batchDraw();
+    }
+
+    /**
+     * Ends the mid-handle gesture.
+     */
+    function onUp() {
+      stage.off(".wireMidpoint");
+      if (inserted) {
+        showBendHandles(wire);
+        notifyChange();
+      }
+      layer.batchDraw();
+    }
+
+    stage.on("mousemove.wireMidpoint touchmove.wireMidpoint", onMove);
+    stage.on("mouseup.wireMidpoint touchend.wireMidpoint", onUp);
+  }
+
+  /**
+   * Shows draggable bend + midpoint handles for the selected wire.
    * @param {object} wire - Wire record.
    */
   function showBendHandles(wire) {
     destroyBendHandles(wire);
     wire.handles = [];
+    wire.midHandles = [];
+
+    refreshMidpointHandles(wire);
 
     for (let i = 0; i < wire.bends.length; i += 1) {
       (function (bendIndex) {
@@ -297,7 +514,7 @@ export function createWireManager(layer, options) {
         const handle = new Konva.Circle({
           x: bend.x,
           y: bend.y,
-          radius: 6,
+          radius: BEND_HANDLE_RADIUS,
           fill: "#ffffff",
           stroke: "#2563eb",
           strokeWidth: 2,
@@ -305,8 +522,13 @@ export function createWireManager(layer, options) {
           name: "bend-handle",
         });
 
+        handle.on("mousedown touchstart", function (evt) {
+          evt.cancelBubble = true;
+        });
+
         handle.on("dragstart", function () {
           pushHistory();
+          destroyMidHandles(wire);
         });
 
         handle.on("dragmove", function () {
@@ -316,9 +538,15 @@ export function createWireManager(layer, options) {
           layer.batchDraw();
         });
 
+        handle.on("dragend", function () {
+          refreshMidpointHandles(wire);
+          layer.batchDraw();
+          notifyChange();
+        });
+
         handle.on("click tap", function (evt) {
           evt.cancelBubble = true;
-          selectWire(wire);
+          selectWire(wire, null);
         });
 
         handle.on("dblclick dbltap", function (evt) {
@@ -336,95 +564,58 @@ export function createWireManager(layer, options) {
 
   /**
    * Deselects the currently selected wire, if any.
+   * @param {{ silent?: boolean }} [clearOpts] - Pass silent to skip selection listeners.
    */
-  function clearWireSelection() {
+  function clearWireSelection(clearOpts) {
+    const silent = !!(clearOpts && clearOpts.silent);
     if (selectedWire) {
-      selectedWire.line.strokeWidth(3);
-      applyWireDash(selectedWire);
+      applyWireStroke(selectedWire, false);
       destroyBendHandles(selectedWire);
       selectedWire = null;
+      if (!silent) {
+        notifySelectionChange(null, null);
+      }
     }
   }
 
   /**
    * Selects a wire for editing bends or deletion.
    * @param {object} wire - Wire record from the manager.
+   * @param {{ x: number; y: number }|null} [worldPos] - Optional menu anchor.
    */
-  function selectWire(wire) {
-    clearWireSelection();
+  function selectWire(wire, worldPos) {
+    clearWireSelection({ silent: true });
     selectedWire = wire;
-    wire.line.strokeWidth(5);
+    applyWireStroke(wire, true);
+    wire.line.moveToTop();
+    if (wire.understroke) {
+      wire.understroke.moveToTop();
+      wire.line.moveToTop();
+    }
     showBendHandles(wire);
+    notifySelectionChange(wire, worldPos || null);
     layer.batchDraw();
-  }
-
-  /**
-   * Squared distance from a point to a line segment.
-   * @param {number} px - Point x.
-   * @param {number} py - Point y.
-   * @param {number} x1 - Segment start x.
-   * @param {number} y1 - Segment start y.
-   * @param {number} x2 - Segment end x.
-   * @param {number} y2 - Segment end y.
-   */
-  function distToSegmentSq(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    if (dx === 0 && dy === 0) {
-      const ex = px - x1;
-      const ey = py - y1;
-      return ex * ex + ey * ey;
-    }
-    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
-    const projX = x1 + t * dx;
-    const projY = y1 + t * dy;
-    const ex = px - projX;
-    const ey = py - projY;
-    return ex * ex + ey * ey;
-  }
-
-  /**
-   * Finds which polyline segment is closest to a stage point.
-   * @param {object} wire - Wire record.
-   * @param {number} x - Stage x.
-   * @param {number} y - Stage y.
-   */
-  function findClosestSegmentIndex(wire, x, y) {
-    const points = buildPoints(wire);
-    let bestIndex = 0;
-    let bestDist = Infinity;
-
-    for (let i = 0; i < points.length - 2; i += 2) {
-      const dist = distToSegmentSq(
-        x,
-        y,
-        points[i],
-        points[i + 1],
-        points[i + 2],
-        points[i + 3]
-      );
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestIndex = i / 2;
-      }
-    }
-
-    return bestIndex;
   }
 
   /**
    * Adds a bend point on a wire near the given stage position.
    * @param {object} wire - Wire record.
-   * @param {number} x - Stage x of the new bend.
-   * @param {number} y - Stage y of the new bend.
+   * @param {number} x - Layer x of the new bend.
+   * @param {number} y - Layer y of the new bend.
    */
   function addBend(wire, x, y) {
     pushHistory();
-    const segmentIndex = findClosestSegmentIndex(wire, x, y);
-    const bendInsertAt = Math.max(0, segmentIndex);
-    wire.bends.splice(bendInsertAt, 0, { x: x, y: y });
+    const fromPos = getTerminalPosition(wire.from, layer);
+    const toPos = getTerminalPosition(wire.to, layer);
+    const segmentIndex = findClosestSegmentIndex(
+      fromPos,
+      wire.bends,
+      toPos,
+      { x: x, y: y }
+    );
+    wire.bends.splice(segmentIndex, 0, { x: x, y: y });
     refreshWireGeometry(wire);
-    selectWire(wire);
+    selectWire(wire, null);
     notifyChange();
   }
 
@@ -442,6 +633,7 @@ export function createWireManager(layer, options) {
     refreshWireGeometry(wire);
     if (selectedWire === wire) {
       showBendHandles(wire);
+      notifySelectionChange(wire, null);
     }
     notifyChange();
     layer.batchDraw();
@@ -454,10 +646,14 @@ export function createWireManager(layer, options) {
     for (let i = 0; i < wires.length; i += 1) {
       const wire = wires[i];
       refreshWireGeometry(wire);
-      if (wire.handles && wire.handles.length > 0) {
-        for (let h = 0; h < wire.handles.length; h += 1) {
-          wire.handles[h].position(wire.bends[h]);
-        }
+      if (selectedWire === wire) {
+        showBendHandles(wire);
+      }
+    }
+    if (draftLine && pendingTerminal) {
+      const pointer = layer.getRelativePointerPosition();
+      if (pointer) {
+        setDraftDrag(pendingTerminal, pointer);
       }
     }
     layer.batchDraw();
@@ -467,14 +663,13 @@ export function createWireManager(layer, options) {
    * Creates a wire between two terminals.
    * @param {{ node: Konva.Circle }} from - First terminal.
    * @param {{ node: Konva.Circle }} to - Second terminal.
-   * @param {string} colorKey - Key in WIRE_COLORS (red, gray, blue, green).
+   * @param {string} colorKey - Key in WIRE_COLORS.
    * @param {{ selectable?: boolean, bends?: Array<{x: number, y: number}>, recordHistory?: boolean }} [wireOpts] - Wire options.
    */
   function addWire(from, to, colorKey, wireOpts) {
     const options = wireOpts || {};
     const selectable = options.selectable !== false;
     const recordHistory = options.recordHistory !== false && !restoring;
-    const stroke = WIRE_COLORS[colorKey] || WIRE_COLORS.red;
     const bends = [];
     if (options.bends) {
       for (let i = 0; i < options.bends.length; i += 1) {
@@ -486,34 +681,48 @@ export function createWireManager(layer, options) {
       pushHistory();
     }
 
-    const patternIndex = countWiresWithColor(colorKey);
     const wire = {
       id: "wire-" + wires.length + "-" + Date.now(),
       from: from,
       to: to,
       colorKey: colorKey,
-      patternIndex: patternIndex,
       bends: bends,
       handles: [],
+      midHandles: [],
       selectable: selectable,
       line: null,
+      understroke: null,
     };
 
-    const line = new Konva.Line({
-      points: buildPoints(wire),
-      stroke: stroke,
-      strokeWidth: 3,
-      dash: dashForPatternIndex(patternIndex),
+    const points = buildPoints(wire);
+    const understroke = new Konva.Line({
+      points: points,
+      stroke: WIRE_UNDERSTROKE_COLOR,
+      strokeWidth: WIRE_STROKE_WIDTH + WIRE_UNDERSTROKE_PAD,
       lineCap: "round",
       lineJoin: "round",
+      tension: WIRE_TENSION,
+      listening: false,
+      name: "wire-understroke",
+    });
+    const line = new Konva.Line({
+      points: points,
+      stroke: WIRE_COLORS[colorKey] || WIRE_COLORS.black,
+      strokeWidth: WIRE_STROKE_WIDTH,
+      lineCap: "round",
+      lineJoin: "round",
+      tension: WIRE_TENSION,
       hitStrokeWidth: 16,
       listening: true,
+      name: "wire-line",
     });
+    wire.understroke = understroke;
     wire.line = line;
 
     line.on("click tap", function (evt) {
       evt.cancelBubble = true;
-      selectWire(wire);
+      const pos = layer.getRelativePointerPosition();
+      selectWire(wire, pos);
     });
 
     line.on("dblclick dbltap", function (evt) {
@@ -525,12 +734,36 @@ export function createWireManager(layer, options) {
       addBend(wire, pos.x, pos.y);
     });
 
+    layer.add(understroke);
     layer.add(line);
-    line.moveToBottom();
+    // New wires stack above older ones (understroke immediately under stroke).
+    understroke.moveToTop();
+    line.moveToTop();
+
     wires.push(wire);
     notifyChange();
     layer.batchDraw();
     return wire;
+  }
+
+  /**
+   * Connects two terminals when the pair is valid and new.
+   * @param {object} from - First terminal.
+   * @param {object} to - Second terminal.
+   * @param {string} colorKey - Wire color key.
+   */
+  function connectTerminals(from, to, colorKey) {
+    if (!from || !to) {
+      return null;
+    }
+    if (terminalKey(from) === terminalKey(to)) {
+      return null;
+    }
+    if (hasWireBetween(from, to)) {
+      return null;
+    }
+    clearWireSelection();
+    return addWire(from, to, colorKey, { selectable: true });
   }
 
   /**
@@ -547,14 +780,16 @@ export function createWireManager(layer, options) {
     if (options.recordHistory !== false && !restoring) {
       pushHistory();
     }
-    const colorKey = wire.colorKey;
     destroyBendHandles(wire);
+    if (wire.understroke) {
+      wire.understroke.destroy();
+    }
     wire.line.destroy();
     wires.splice(index, 1);
     if (selectedWire === wire) {
       selectedWire = null;
+      notifySelectionChange(null, null);
     }
-    reassignPatternsForColor(colorKey);
     notifyChange();
     layer.batchDraw();
   }
@@ -574,14 +809,40 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Changes the color of an existing wire.
+   * @param {object} wire - Wire to recolor.
+   * @param {string} colorKey - New color key.
+   */
+  function setWireColorKey(wire, colorKey) {
+    if (!wire || wire.selectable === false) {
+      return;
+    }
+    if (!WIRE_COLORS[colorKey] || wire.colorKey === colorKey) {
+      return;
+    }
+    pushHistory();
+    wire.colorKey = colorKey;
+    applyWireStroke(wire, selectedWire === wire);
+    notifyChange();
+    if (selectedWire === wire) {
+      notifySelectionChange(wire, null);
+    }
+    layer.batchDraw();
+  }
+
+  /**
    * Removes every wire without recording undo (used for mode rebuilds).
    */
   function clearWires() {
     clearPendingHighlight();
     clearWireSelection();
+    clearDraft();
     while (wires.length > 0) {
       const wire = wires.pop();
       destroyBendHandles(wire);
+      if (wire.understroke) {
+        wire.understroke.destroy();
+      }
       wire.line.destroy();
     }
     notifyChange();
@@ -642,7 +903,40 @@ export function createWireManager(layer, options) {
   }
 
   /**
-   * Handles a terminal click for wire drawing in Lab mode.
+   * Returns the pending terminal, if any.
+   */
+  function getPendingTerminal() {
+    return pendingTerminal;
+  }
+
+  /**
+   * Returns the currently selected wire, if any.
+   */
+  function getSelectedWire() {
+    return selectedWire;
+  }
+
+  /**
+   * Resolves a terminal under a stage pointer (for drag-connect drop).
+   * @param {Konva.Stage} stage - Active stage.
+   */
+  function terminalAtPointer(stage) {
+    if (!stage || typeof findTerminalFromNode !== "function") {
+      return null;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return null;
+    }
+    const shape = stage.getIntersection(pointer);
+    if (!shape) {
+      return null;
+    }
+    return findTerminalFromNode(shape);
+  }
+
+  /**
+   * Handles a terminal click for wire drawing in Lab mode (pending / complete).
    * @param {{ node: Konva.Circle }} terminal - Clicked terminal.
    * @param {string} colorKey - Active wire color key.
    * @param {boolean} enabled - Whether wire drawing is allowed.
@@ -664,7 +958,23 @@ export function createWireManager(layer, options) {
       return;
     }
 
-    addWire(pendingTerminal, terminal, colorKey, { selectable: true });
+    connectTerminals(pendingTerminal, terminal, colorKey);
+    clearPendingHighlight();
+    layer.batchDraw();
+  }
+
+  /**
+   * Completes a drag-connect if the pointer is over another terminal.
+   * @param {object} fromTerminal - Start terminal.
+   * @param {Konva.Stage} stage - Active stage.
+   * @param {string} colorKey - Active wire color key.
+   */
+  function completeDragConnect(fromTerminal, stage, colorKey) {
+    clearDraft();
+    const target = terminalAtPointer(stage);
+    if (target && terminalKey(target) !== terminalKey(fromTerminal)) {
+      connectTerminals(fromTerminal, target, colorKey);
+    }
     clearPendingHighlight();
     layer.batchDraw();
   }
@@ -678,16 +988,27 @@ export function createWireManager(layer, options) {
 
   return {
     addWire: addWire,
+    connectTerminals: connectTerminals,
     removeWire: removeWire,
     removeSelectedWire: removeSelectedWire,
+    setWireColorKey: setWireColorKey,
     clearWires: clearWires,
     clearPendingHighlight: clearPendingHighlight,
     clearWireSelection: clearWireSelection,
+    clearDraft: clearDraft,
+    setDraftDrag: setDraftDrag,
+    setPendingTerminal: setPendingTerminal,
     updateWirePositions: updateWirePositions,
     handleTerminalClick: handleTerminalClick,
+    completeDragConnect: completeDragConnect,
+    terminalAtPointer: terminalAtPointer,
     getWires: getWires,
+    getSelectedWire: getSelectedWire,
+    getPendingTerminal: getPendingTerminal,
     terminalKey: terminalKey,
     hasPendingTerminal: hasPendingTerminal,
+    hasWireBetween: hasWireBetween,
+    selectWire: selectWire,
     undo: undo,
     canUndo: canUndo,
     clearHistory: clearHistory,

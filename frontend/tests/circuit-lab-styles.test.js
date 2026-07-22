@@ -21,6 +21,7 @@ describe("circuit-lab-styles", () => {
     expect(styles).toHaveLength(1);
     expect(styles[0].textContent).toContain(":host");
     expect(styles[0].textContent).toContain(".lab-toolbar");
+    expect(styles[0].textContent).toContain(".wire-menu");
     expect(styles[0].textContent).toBe(CIRCUIT_LAB_CSS);
   });
 

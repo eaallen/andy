@@ -305,7 +305,16 @@ export function addTerminal(group, x, y, id, label, opts) {
     stage.on("mouseup.terminalSlide touchend.terminalSlide", onUp);
   }
 
-  handle.on("mousedown touchstart", beginSlide);
+  terminal.beginSlide = beginSlide;
+  terminal.slideToPointer = slideToPointer;
+
+  handle.on("mousedown touchstart", function (evt) {
+    if (typeof terminal.onPointerDown === "function") {
+      terminal.onPointerDown(evt);
+      return;
+    }
+    beginSlide(evt);
+  });
 
   return terminal;
 }

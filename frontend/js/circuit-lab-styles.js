@@ -132,42 +132,6 @@ export const CIRCUIT_LAB_CSS = `
   border-color: #6d28d9;
 }
 
-.wire-swatch {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2px solid #d4d4d8;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
-}
-
-.wire-swatch:hover {
-  transform: scale(1.08);
-  border-color: #a1a1aa;
-}
-
-.wire-swatch.active {
-  border-color: #1a1a1a;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb;
-}
-
-.wire-red {
-  background: #dc2626;
-}
-
-.wire-gray {
-  background: #71717a;
-}
-
-.wire-blue {
-  background: #2563eb;
-}
-
-.wire-green {
-  background: #16a34a;
-}
-
 .lab-hint {
   flex: 1 1 220px;
   margin: 0;
@@ -226,6 +190,114 @@ export const CIRCUIT_LAB_CSS = `
 
 .lab-stage canvas {
   touch-action: none;
+}
+
+.wire-menu {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 14px rgba(24, 24, 27, 0.14),
+    0 1px 3px rgba(24, 24, 27, 0.08);
+  pointer-events: auto;
+}
+
+.wire-menu[hidden] {
+  display: none;
+}
+
+.wire-menu-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.wire-menu-item {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: #3f3f46;
+  cursor: pointer;
+}
+
+.wire-menu-item:hover {
+  background: #f4f4f5;
+}
+
+.wire-menu-item--danger {
+  color: #dc2626;
+}
+
+.wire-menu-item--danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.wire-menu-color-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 6px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+}
+
+.wire-menu-color-trigger:hover {
+  background: #f4f4f5;
+}
+
+.wire-menu-color-trigger[aria-expanded="true"] {
+  background: #f4f4f5;
+}
+
+.wire-menu-color-trigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.wire-menu-colors {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 2px;
+}
+
+.wire-menu-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(24, 24, 27, 0.2);
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+button.wire-menu-swatch:hover {
+  outline: 2px solid #a1a1aa;
+  outline-offset: 1px;
+}
+
+.wire-menu-swatch--selected {
+  outline: 2px solid #18181b;
+  outline-offset: 1px;
 }
 
 .circuit-lab-error {

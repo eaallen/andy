@@ -50,8 +50,29 @@ export const TERMINAL_ROLES = {
 };
 
 export const WIRE_COLORS = {
+  black: "#0f172a",
+  white: "#ffffff",
   red: "#dc2626",
-  gray: "#71717a",
   blue: "#2563eb",
+  yellow: "#eab308",
+  orange: "#ea580c",
   green: "#16a34a",
+  purple: "#9333ea",
+  /** Legacy alias used by component terminals and YAML demo wires. */
+  gray: "#71717a",
 };
+
+/** Default color for newly drawn wires. */
+export const DEFAULT_WIRE_COLOR = "black";
+
+/** Ordered wire color options for the floating picker (matches React lab). */
+export const WIRE_COLOR_OPTIONS = [
+  { id: "black", label: "Black", hex: WIRE_COLORS.black },
+  { id: "white", label: "White", hex: WIRE_COLORS.white },
+  { id: "red", label: "Red", hex: WIRE_COLORS.red },
+  { id: "blue", label: "Blue", hex: WIRE_COLORS.blue },
+  { id: "yellow", label: "Yellow", hex: WIRE_COLORS.yellow },
+  { id: "orange", label: "Orange", hex: WIRE_COLORS.orange },
+  { id: "green", label: "Green", hex: WIRE_COLORS.green },
+  { id: "purple", label: "Purple", hex: WIRE_COLORS.purple },
+];

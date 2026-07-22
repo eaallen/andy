@@ -21,14 +21,6 @@ function createLabUiShell() {
     '<button type="button" class="toolbar-btn" data-lab-mode="lab" aria-pressed="false">Lab</button>' +
     "</div>" +
     '<div class="toolbar-divider" aria-hidden="true"></div>' +
-    '<div class="toolbar-group" data-lab-wire-colors role="group" aria-label="Wire color">' +
-    '<span class="toolbar-label">Wire</span>' +
-    '<button type="button" class="wire-swatch wire-red active" data-color="red" aria-label="Red wire" aria-pressed="true"></button>' +
-    '<button type="button" class="wire-swatch wire-gray" data-color="gray" aria-label="Gray wire" aria-pressed="false"></button>' +
-    '<button type="button" class="wire-swatch wire-blue" data-color="blue" aria-label="Blue wire" aria-pressed="false"></button>' +
-    '<button type="button" class="wire-swatch wire-green" data-color="green" aria-label="Green wire" aria-pressed="false"></button>' +
-    "</div>" +
-    '<div class="toolbar-divider" aria-hidden="true"></div>' +
     '<div class="toolbar-group" role="group" aria-label="Circuit actions">' +
     '<button type="button" class="toolbar-btn" data-lab-action="undo" disabled title="Undo (Ctrl/Cmd+Z)">Undo</button>' +
     '<button type="button" class="toolbar-btn lab-btn-test" data-lab-action="test">Test</button>' +
