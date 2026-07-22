@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import type { Node as KonvaNode } from "konva/lib/Node";
@@ -67,7 +67,63 @@ type Wire = {
   to: string;
   /** World-space bend points between the two terminals. */
   bends: Point[];
+  color: WireColor;
 };
+
+type WireColor =
+  | "black"
+  | "white"
+  | "red"
+  | "blue"
+  | "yellow"
+  | "orange"
+  | "green"
+  | "purple";
+
+const WIRE_COLORS: readonly {
+  id: WireColor;
+  label: string;
+  hex: string;
+}[] = [
+  { id: "black", label: "Black", hex: "#0f172a" },
+  { id: "white", label: "White", hex: "#ffffff" },
+  { id: "red", label: "Red", hex: "#dc2626" },
+  { id: "blue", label: "Blue", hex: "#2563eb" },
+  { id: "yellow", label: "Yellow", hex: "#eab308" },
+  { id: "orange", label: "Orange", hex: "#ea580c" },
+  { id: "green", label: "Green", hex: "#16a34a" },
+  { id: "purple", label: "Purple", hex: "#9333ea" },
+];
+
+const DEFAULT_WIRE_COLOR: WireColor = "black";
+
+/**
+ * Resolves a wire color id to a CSS hex stroke.
+ */
+function wireColorHex(color: WireColor): string {
+  switch (color) {
+    case "black":
+      return "#0f172a";
+    case "white":
+      return "#ffffff";
+    case "red":
+      return "#dc2626";
+    case "blue":
+      return "#2563eb";
+    case "yellow":
+      return "#eab308";
+    case "orange":
+      return "#ea580c";
+    case "green":
+      return "#16a34a";
+    case "purple":
+      return "#9333ea";
+    default: {
+      const _exhaustive: never = color;
+      throw new Error(`Unhandled wire color: ${_exhaustive}`);
+    }
+  }
+}
 
 type WireDraft =
   | { kind: "pending"; from: string }
@@ -78,6 +134,197 @@ type WireGesture = {
   start: Point;
   dragging: boolean;
 };
+
+/** Floating wire actions menu anchored to a world-space click point. */
+type WireMenu = {
+  wireId: string;
+  /** World-space anchor so the menu stays on the wire while panning/zooming. */
+  world: Point;
+  /** Whether the color swatch list is expanded. */
+  colorPickerOpen: boolean;
+};
+
+/**
+ * Trash can icon for the wire actions menu delete button.
+ */
+function TrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3.5 4.5h9M6.5 4.5V3.25A.75.75 0 0 1 7.25 2.5h1.5a.75.75 0 0 1 .75.75V4.5m-5 0 .6 8.1a1 1 0 0 0 1 .9h3.3a1 1 0 0 0 1-.9l.6-8.1M6.5 7v4.5M9.5 7v4.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Small chevron indicating more wire color choices are available.
+ */
+function ColorMoreIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 4.5 6 7.5 9 4.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+type WireActionsMenuProps = {
+  menu: WireMenu;
+  /** Stage-container pixel position of the world anchor. */
+  screen: Point;
+  /** Stage wrap size used to keep the menu on-screen. */
+  viewport: StageSize;
+  color: WireColor;
+  onDelete: () => void;
+  onToggleColorPicker: () => void;
+  onPickColor: (color: WireColor) => void;
+};
+
+const WIRE_MENU_GAP = 10;
+const WIRE_MENU_MARGIN = 8;
+
+/**
+ * Floating delete + color controls for a selected wire.
+ * Flips below the anchor (and clamps horizontally) when near screen edges.
+ */
+function WireActionsMenu({
+  menu,
+  screen,
+  viewport,
+  color,
+  onDelete,
+  onToggleColorPicker,
+  onPickColor,
+}: WireActionsMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: screen.x, top: screen.y });
+  const current = WIRE_COLORS.find((entry) => entry.id === color) ?? WIRE_COLORS[0];
+
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
+    if (width <= 0 || height <= 0) return;
+
+    let top = screen.y - height - WIRE_MENU_GAP;
+    if (top < WIRE_MENU_MARGIN) {
+      top = screen.y + WIRE_MENU_GAP;
+    }
+    if (top + height > viewport.height - WIRE_MENU_MARGIN) {
+      top = Math.max(
+        WIRE_MENU_MARGIN,
+        viewport.height - WIRE_MENU_MARGIN - height,
+      );
+    }
+
+    let left = screen.x - width / 2;
+    left = Math.min(
+      Math.max(left, WIRE_MENU_MARGIN),
+      Math.max(WIRE_MENU_MARGIN, viewport.width - WIRE_MENU_MARGIN - width),
+    );
+
+    setPos((prev) =>
+      prev.left === left && prev.top === top ? prev : { left, top },
+    );
+  }, [
+    screen.x,
+    screen.y,
+    viewport.width,
+    viewport.height,
+    menu.colorPickerOpen,
+  ]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="wire-menu"
+      role="menu"
+      aria-label="Wire actions"
+      style={{ left: pos.left, top: pos.top }}
+    >
+      <div className="wire-menu-row">
+        <button
+          type="button"
+          className="wire-menu-item wire-menu-item--danger"
+          role="menuitem"
+          aria-label="Delete wire"
+          title="Delete wire"
+          onClick={onDelete}
+        >
+          <TrashIcon />
+        </button>
+        <button
+          type="button"
+          className="wire-menu-color-trigger"
+          role="menuitem"
+          aria-haspopup="true"
+          aria-expanded={menu.colorPickerOpen}
+          aria-label={`Wire color: ${current.label}. Choose color`}
+          title="Choose color"
+          onClick={onToggleColorPicker}
+        >
+          <span
+            className="wire-menu-swatch"
+            style={{ backgroundColor: current.hex }}
+          />
+          <ColorMoreIcon />
+        </button>
+      </div>
+      {menu.colorPickerOpen ? (
+        <div
+          className="wire-menu-colors"
+          role="group"
+          aria-label="Wire color options"
+        >
+          {WIRE_COLORS.map((entry) => {
+            const selected = entry.id === color;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                className={
+                  selected
+                    ? "wire-menu-swatch wire-menu-swatch--selected"
+                    : "wire-menu-swatch"
+                }
+                role="menuitemradio"
+                aria-checked={selected}
+                aria-label={entry.label}
+                title={entry.label}
+                style={{ backgroundColor: entry.hex }}
+                onClick={() => onPickColor(entry.id)}
+              />
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Fallback world-space box until the stage measures live module bounds.
@@ -229,6 +476,16 @@ function pointerToWorld(
 }
 
 /**
+ * Projects a world point into stage-container pixel coordinates.
+ */
+function worldToPointer(world: Point, view: ViewState): Point {
+  return {
+    x: world.x * view.scale + view.x,
+    y: world.y * view.scale + view.y,
+  };
+}
+
+/**
  * Reads a terminal id from a Konva node or one of its ancestors.
  */
 function terminalIdFromNode(node: KonvaNode | null | undefined): string | null {
@@ -354,7 +611,10 @@ type LabLayerProps = {
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
-  onWireSelect: (id: string) => void;
+  onWireSelect: (
+    id: string,
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
   onWireAddBend: (
     id: string,
     e: KonvaEventObject<MouseEvent | TouchEvent>,
@@ -397,6 +657,7 @@ const LabLayer = memo(function LabLayer({
       return {
         id: wire.id,
         bends: wire.bends,
+        color: wire.color,
         from,
         to,
         points: buildWireFlatPoints(from, wire.bends, to),
@@ -408,6 +669,7 @@ const LabLayer = memo(function LabLayer({
       ): w is {
         id: string;
         bends: Point[];
+        color: WireColor;
         from: Point;
         to: Point;
         points: number[];
@@ -431,19 +693,24 @@ const LabLayer = memo(function LabLayer({
             <Line
               name={`wire-${wire.id}`}
               points={wire.points}
-              stroke={selected ? "#2563eb" : "#334155"}
+              stroke={wireColorHex(wire.color)}
               strokeWidth={selected ? 5 : 3}
               hitStrokeWidth={16}
               lineCap="round"
               lineJoin="round"
               tension={WIRE_TENSION}
+              shadowColor={
+                wire.color === "white" || selected ? "#64748b" : undefined
+              }
+              shadowBlur={wire.color === "white" || selected ? 2 : 0}
+              shadowOpacity={wire.color === "white" || selected ? 0.55 : 0}
               onClick={(e) => {
                 e.cancelBubble = true;
-                onWireSelect(wire.id);
+                onWireSelect(wire.id, e);
               }}
               onTap={(e) => {
                 e.cancelBubble = true;
-                onWireSelect(wire.id);
+                onWireSelect(wire.id, e);
               }}
               onDblClick={(e) => {
                 e.cancelBubble = true;
@@ -600,6 +867,7 @@ export function App() {
     useState<Record<ModuleId, Point>>(INITIAL_POSITIONS);
   const [wires, setWires] = useState<Wire[]>([]);
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
+  const [wireMenu, setWireMenu] = useState<WireMenu | null>(null);
   const [draft, setDraft] = useState<WireDraft | null>(null);
 
   contentBoundsRef.current = contentBounds;
@@ -678,7 +946,7 @@ export function App() {
       return "Drop on a terminal to connect";
     }
     if (selectedWireId) {
-      return "Wire selected — drag nodes to reshape · dbl-click adds · Delete removes";
+      return "Wire selected — use trash to delete · drag nodes to reshape";
     }
     const active = Object.entries(pressed)
       .filter(([, isDown]) => isDown)
@@ -722,11 +990,38 @@ export function App() {
   );
 
   /**
+   * Clears wire selection and the floating wire menu.
+   */
+  const clearWireSelection = useCallback(() => {
+    setSelectedWireId(null);
+    setWireMenu(null);
+  }, []);
+
+  /**
+   * Removes a wire and closes selection / menu.
+   */
+  const deleteWire = useCallback((id: string) => {
+    setWires((prev) => prev.filter((w) => w.id !== id));
+    setSelectedWireId(null);
+    setWireMenu(null);
+  }, []);
+
+  /**
+   * Sets the color of an existing wire.
+   */
+  const setWireColor = useCallback((id: string, color: WireColor) => {
+    setWires((prev) =>
+      prev.map((wire) => (wire.id === id ? { ...wire, color } : wire)),
+    );
+  }, []);
+
+  /**
    * Adds a wire between two terminals when the pair is valid and new.
    */
   const connectTerminals = useCallback((from: string, to: string) => {
     if (from === to) return;
     setSelectedWireId(null);
+    setWireMenu(null);
     setWires((prev) => {
       if (hasWireBetween(prev, from, to)) return prev;
       return [
@@ -736,19 +1031,34 @@ export function App() {
           from,
           to,
           bends: [],
+          color: DEFAULT_WIRE_COLOR,
         },
       ];
     });
   }, []);
 
   /**
-   * Selects a wire and clears any in-progress draft.
+   * Selects a wire and opens the actions menu at the click point.
    */
-  const handleWireSelect = useCallback((id: string) => {
-    setDraft(null);
-    gestureRef.current = null;
-    setSelectedWireId(id);
-  }, []);
+  const handleWireSelect = useCallback(
+    (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      setDraft(null);
+      gestureRef.current = null;
+      setSelectedWireId(id);
+      const stage = e.target.getStage();
+      const pointer = stage?.getPointerPosition();
+      if (!pointer) {
+        setWireMenu(null);
+        return;
+      }
+      setWireMenu({
+        wireId: id,
+        world: pointerToWorld(pointer, viewRef.current),
+        colorPickerOpen: false,
+      });
+    },
+    [],
+  );
 
   /**
    * Moves one bend point on a wire (while dragging a handle).
@@ -813,6 +1123,7 @@ export function App() {
         }),
       );
       setSelectedWireId(id);
+      setWireMenu(null);
     },
     [],
   );
@@ -900,6 +1211,7 @@ export function App() {
       if (!pointer) return;
 
       setSelectedWireId(null);
+      setWireMenu(null);
 
       gestureRef.current = {
         from: terminalId,
@@ -988,7 +1300,7 @@ export function App() {
     if (draftRef.current?.kind === "pending") {
       setDraft(null);
     }
-    setSelectedWireId(null);
+    clearWireSelection();
   }
 
   /**
@@ -997,7 +1309,7 @@ export function App() {
   function reset() {
     setPressed({ front: false, rear: false });
     setWires([]);
-    setSelectedWireId(null);
+    clearWireSelection();
     setDraft(null);
     gestureRef.current = null;
   }
@@ -1020,7 +1332,7 @@ export function App() {
 
       if (evt.key === "Escape") {
         setDraft(null);
-        setSelectedWireId(null);
+        clearWireSelection();
         gestureRef.current = null;
         return;
       }
@@ -1030,14 +1342,13 @@ export function App() {
         selectedWireId
       ) {
         evt.preventDefault();
-        setWires((prev) => prev.filter((w) => w.id !== selectedWireId));
-        setSelectedWireId(null);
+        deleteWire(selectedWireId);
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedWireId]);
+  }, [clearWireSelection, deleteWire, selectedWireId]);
 
   /**
    * Zooms toward the stage center by a fixed step.
@@ -1158,6 +1469,31 @@ export function App() {
               />
             </Stage>
           </AppCtxProvider>
+        ) : null}
+        {wireMenu ? (
+          <WireActionsMenu
+            menu={wireMenu}
+            screen={worldToPointer(wireMenu.world, view)}
+            viewport={size}
+            color={
+              wires.find((w) => w.id === wireMenu.wireId)?.color ??
+              DEFAULT_WIRE_COLOR
+            }
+            onDelete={() => deleteWire(wireMenu.wireId)}
+            onToggleColorPicker={() =>
+              setWireMenu((prev) =>
+                prev
+                  ? { ...prev, colorPickerOpen: !prev.colorPickerOpen }
+                  : prev,
+              )
+            }
+            onPickColor={(color) => {
+              setWireColor(wireMenu.wireId, color);
+              setWireMenu((prev) =>
+                prev ? { ...prev, colorPickerOpen: false } : prev,
+              );
+            }}
+          />
         ) : null}
       </div>
     </div>
