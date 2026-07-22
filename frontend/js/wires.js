@@ -1,4 +1,5 @@
 import Konva from "konva";
+import { STAGE_DEFAULT_CURSOR } from "./canvas-nav.js";
 import { WIRE_COLORS } from "./components/constants.js";
 import { getTerminalComponentGroup, getTerminalPosition } from "./components/shared.js";
 import {
@@ -19,6 +20,25 @@ const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
 const BEND_HANDLE_RADIUS = 6;
 /** Pointer travel (stage px) before a mid-handle press inserts a bend. */
 export const WIRE_DRAG_THRESHOLD = 6;
+
+/**
+ * Shows a crosshair over bend / midpoint handles.
+ * @param {Konva.Node} handle - Bend or midpoint handle node.
+ */
+function bindBendHandleCursor(handle) {
+  handle.on("mouseenter", function () {
+    const stage = handle.getStage();
+    if (stage) {
+      stage.container().style.cursor = "crosshair";
+    }
+  });
+  handle.on("mouseleave", function () {
+    const stage = handle.getStage();
+    if (stage) {
+      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+    }
+  });
+}
 
 /**
  * Manages terminal-to-terminal wires on a Konva layer, with bend points and undo.
@@ -395,6 +415,7 @@ export function createWireManager(layer, options) {
         handle.on("click tap", function (evt) {
           evt.cancelBubble = true;
         });
+        bindBendHandleCursor(handle);
         layer.add(handle);
         wire.midHandles.push(handle);
       })(i);
@@ -461,6 +482,7 @@ export function createWireManager(layer, options) {
               strokeWidth: 2,
               name: "bend-handle",
             });
+            bindBendHandleCursor(handle);
             layer.add(handle);
             wire.handles.push(handle);
           })(i);
@@ -529,6 +551,10 @@ export function createWireManager(layer, options) {
         handle.on("dragstart", function () {
           pushHistory();
           destroyMidHandles(wire);
+          const stage = handle.getStage();
+          if (stage) {
+            stage.container().style.cursor = "crosshair";
+          }
         });
 
         handle.on("dragmove", function () {
@@ -542,6 +568,10 @@ export function createWireManager(layer, options) {
           refreshMidpointHandles(wire);
           layer.batchDraw();
           notifyChange();
+          const stage = handle.getStage();
+          if (stage) {
+            stage.container().style.cursor = "crosshair";
+          }
         });
 
         handle.on("click tap", function (evt) {
@@ -554,6 +584,7 @@ export function createWireManager(layer, options) {
           removeBend(wire, bendIndex);
         });
 
+        bindBendHandleCursor(handle);
         layer.add(handle);
         wire.handles.push(handle);
       })(i);
