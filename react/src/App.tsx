@@ -23,7 +23,7 @@ import {
   type TerminalCounts,
 } from "./comps/terminals";
 
-const MIN_SCALE = 0.7;
+const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
 const BUTTON_SCALE_BY = 1.2;
 /** Pinch / ctrl+wheel sensitivity (higher = faster zoom). */
