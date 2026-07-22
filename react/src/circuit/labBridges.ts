@@ -2,10 +2,10 @@ import { terminalKey } from "../comps/terminals";
 import type { ComponentBridges, WireEdge } from "./graph";
 
 /**
- * Internal bridges when a doorbell button is pressed (COM ↔ signal path).
- * Doorbells use three top terminals; indices 0 and 1 close when pressed.
+ * Internal bridge between top terminals 0 and 1 (doorbell COM↔SIG, SPST COM↔NO).
+ * @param {string} id - Component id.
  */
-const DOORBELL_TOP_BRIDGE = (id: string): WireEdge[] => [
+const TOP_01_BRIDGE = (id: string): WireEdge[] => [
   {
     from: terminalKey(id, "top", 0),
     to: terminalKey(id, "top", 1),
@@ -16,6 +16,7 @@ const DOORBELL_TOP_BRIDGE = (id: string): WireEdge[] => [
  * Default closed-switch bridges for the experimental lab modules.
  */
 export const LAB_BRIDGES: ComponentBridges = {
-  front: DOORBELL_TOP_BRIDGE("front"),
-  rear: DOORBELL_TOP_BRIDGE("rear"),
+  front: TOP_01_BRIDGE("front"),
+  rear: TOP_01_BRIDGE("rear"),
+  switch: TOP_01_BRIDGE("switch"),
 };

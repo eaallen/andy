@@ -15,7 +15,6 @@ import {
   STAGE_DEFAULT_CURSOR,
 } from "./comps/stageCursor";
 import {
-  DEFAULT_TERMINALS,
   listTerminals,
   parseTerminalKey,
   terminalKey,
@@ -438,7 +437,7 @@ const MODULE_LAYOUTS: Record<ModuleId, ModuleLayout> = {
   switch: {
     width: SWITCH_SIZE.width,
     height: SWITCH_SIZE.height,
-    terminals: DEFAULT_TERMINALS,
+    terminals: { top: ["COM", "NO"] },
   },
   power: {
     width: POWER_SIZE.width,
@@ -702,12 +701,14 @@ function findClosestSegmentIndex(
 
 type LabLayerProps = {
   pressed: PressedState;
+  switchClosed: boolean;
   positions: Record<ModuleId, Point>;
   wires: Wire[];
   selectedWireId: string | null;
   draft: WireDraft | null;
   lampLit: boolean;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
+  onSwitchClosedChange: (id: "switch", closed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
   onWireSelect: (
@@ -734,12 +735,14 @@ type LabLayerProps = {
  */
 const LabLayer = memo(function LabLayer({
   pressed,
+  switchClosed,
   positions,
   wires,
   selectedWireId,
   draft,
   lampLit,
   onPressedChange,
+  onSwitchClosedChange,
   onModuleDragMove,
   onModuleDragEnd,
   onWireSelect,
@@ -821,9 +824,6 @@ const LabLayer = memo(function LabLayer({
               stroke={wireColorHex(wire.color)}
               strokeWidth={strokeWidth}
               hitStrokeWidth={16}
-              shadowColor={wire.color === "white" ? "#64748b" : undefined}
-              shadowBlur={wire.color === "white" ? 2 : 0}
-              shadowOpacity={wire.color === "white" ? 0.55 : 0}
               {...clickCursor}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -941,6 +941,8 @@ const LabLayer = memo(function LabLayer({
         id="switch"
         x={positions.switch.x}
         y={positions.switch.y}
+        closed={switchClosed}
+        onClosedChange={onSwitchClosedChange}
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
       />
@@ -988,6 +990,7 @@ export function App() {
     front: false,
     rear: false,
   });
+  const [switchClosed, setSwitchClosed] = useState(false);
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
   const [contentBounds, setContentBounds] = useState<ContentBounds>(
     INITIAL_CONTENT_BOUNDS,
@@ -1011,17 +1014,18 @@ export function App() {
     draft?.kind === "pending" || draft?.kind === "drag" ? draft.from : null;
   const wireMode = draft !== null;
 
-  /** Continuity graph: student wires plus bridges for pressed doorbells. */
+  /** Continuity graph: student wires plus bridges for closed switches / buttons. */
   const adjacency = useMemo(() => {
     const wireEdges = wires.map((w) => ({ from: w.from, to: w.to }));
-    const closedIds = (Object.keys(pressed) as ButtonId[]).filter(
-      (id) => pressed[id],
-    );
+    const closedIds = [
+      ...(Object.keys(pressed) as ButtonId[]).filter((id) => pressed[id]),
+      ...(switchClosed ? (["switch"] as const) : []),
+    ];
     return buildAdjacency([
       ...wireEdges,
       ...bridgeEdgesForClosed(closedIds, LAB_BRIDGES),
     ]);
-  }, [wires, pressed]);
+  }, [wires, pressed, switchClosed]);
 
   const lampLit = useMemo(
     () => isLoadEnergized(adjacency, LAB_SUPPLY, LAB_LAMP_LOAD),
@@ -1101,13 +1105,14 @@ export function App() {
       .filter(([, isDown]) => isDown)
       .map(([id]) => id);
     if (active.length > 0) return `Pressed: ${active.join(", ")}`;
+    if (switchClosed) return "Switch closed";
     if (lampLit) return "Lamp is lit";
     if (wires.length > 0) {
       const nodes = adjacency.size;
       return `${wires.length} wire${wires.length === 1 ? "" : "s"} · ${nodes} connected terminal${nodes === 1 ? "" : "s"}`;
     }
     return "Idle — drag or click terminals to wire";
-  }, [adjacency, draft, lampLit, pressed, selectedWireId, wires.length]);
+  }, [adjacency, draft, lampLit, pressed, selectedWireId, switchClosed, wires.length]);
 
   /**
    * Updates one button's pressed flag.
@@ -1116,6 +1121,16 @@ export function App() {
   const setButtonPressed = useCallback((id: ButtonId, isDown: boolean) => {
     setPressed((prev) => ({ ...prev, [id]: isDown }));
   }, []);
+
+  /**
+   * Updates the SPST switch open/closed state.
+   */
+  const setSwitchClosedChange = useCallback(
+    (_id: "switch", closed: boolean) => {
+      setSwitchClosed(closed);
+    },
+    [],
+  );
 
   /**
    * Updates a module's world position while dragging (keeps wires attached).
@@ -1715,12 +1730,14 @@ export function App() {
             >
               <LabLayer
                 pressed={pressed}
+                switchClosed={switchClosed}
                 positions={positions}
                 wires={wires}
                 selectedWireId={selectedWireId}
                 draft={draft}
                 lampLit={lampLit}
                 onPressedChange={setButtonPressed}
+                onSwitchClosedChange={setSwitchClosedChange}
                 onModuleDragMove={handleModuleDragMove}
                 onModuleDragEnd={handleModuleDragEnd}
                 onWireSelect={handleWireSelect}

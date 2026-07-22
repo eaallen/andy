@@ -103,10 +103,6 @@ export function DoorbellButton<Id extends string>({
         fill={padFill}
         stroke={padStroke}
         strokeWidth={2}
-        shadowColor="rgba(29, 78, 216, 0.55)"
-        shadowBlur={pressed ? 2 : 8}
-        shadowOffsetY={pressed ? 1 : 3}
-        shadowForStrokeEnabled={false}
         hitStrokeWidth={8}
         {...clickCursor}
         onMouseDown={press}
