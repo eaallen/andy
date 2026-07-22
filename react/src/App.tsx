@@ -10,6 +10,11 @@ import { Lamp, LAMP_SIZE, LAMP_TERMINALS } from "./comps/Lamp";
 import { Power, POWER_SIZE, POWER_TERMINALS } from "./comps/Power";
 import { Switch, SWITCH_SIZE, SWITCH_TERMINALS } from "./comps/Switch";
 import {
+  ThreeWaySwitch,
+  THREE_WAY_SIZE,
+  THREE_WAY_TERMINALS,
+} from "./comps/ThreeWaySwitch";
+import {
   pointerCursorHandlers,
   setStageCursor,
   STAGE_DEFAULT_CURSOR,
@@ -56,9 +61,11 @@ const WIRE_UNDERSTROKE_PAD = 5;
 const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
 
 type ButtonId = "front" | "rear";
-type ModuleId = ButtonId | "switch" | "power" | "lamp";
+type ThreeWayId = "threeWay1" | "threeWay2";
+type ModuleId = ButtonId | "switch" | ThreeWayId | "power" | "lamp";
 
 type PressedState = Record<ButtonId, boolean>;
+type ThreeWayClosedState = Record<ThreeWayId, boolean>;
 
 type ViewState = {
   scale: number;
@@ -408,7 +415,7 @@ function WireActionsMenu({
 const INITIAL_CONTENT_BOUNDS: ContentBounds = {
   minX: 0,
   minY: 0,
-  maxX: 580,
+  maxX: 860,
   maxY: 280,
 };
 
@@ -418,6 +425,8 @@ const INITIAL_POSITIONS: Record<ModuleId, Point> = {
   front: { x: 120, y: 160 },
   rear: { x: 420, y: 160 },
   switch: { x: 520, y: 40 },
+  threeWay1: { x: 660, y: 40 },
+  threeWay2: { x: 810, y: 40 },
   power: { x: 40, y: 40 },
   lamp: { x: 280, y: 40 },
 };
@@ -437,6 +446,16 @@ const MODULE_LAYOUTS: Record<ModuleId, ModuleLayout> = {
     width: SWITCH_SIZE.width,
     height: SWITCH_SIZE.height,
     terminals: { top: ["COM", "NO"] },
+  },
+  threeWay1: {
+    width: THREE_WAY_SIZE.width,
+    height: THREE_WAY_SIZE.height,
+    terminals: { top: ["T1", "COM", "T2"] },
+  },
+  threeWay2: {
+    width: THREE_WAY_SIZE.width,
+    height: THREE_WAY_SIZE.height,
+    terminals: { top: ["T1", "COM", "T2"] },
   },
   power: {
     width: POWER_SIZE.width,
@@ -464,6 +483,28 @@ const LAB_LAMP_LOAD = {
   requireHot: terminalKey("lamp", "bottom", LAMP_TERMINALS.hot),
   signal: terminalKey("lamp", "bottom", LAMP_TERMINALS.neutral),
 } as const;
+
+/**
+ * SPDT continuity gates for one three-way: open → COM↔T1, closed → COM↔T2.
+ */
+function threeWayContinuityGates(
+  id: ThreeWayId,
+  closed: boolean,
+): ContinuityGate[] {
+  const com = terminalKey(id, "top", THREE_WAY_TERMINALS.com);
+  return [
+    {
+      a: com,
+      b: terminalKey(id, "top", THREE_WAY_TERMINALS.t1),
+      closed: !closed,
+    },
+    {
+      a: com,
+      b: terminalKey(id, "top", THREE_WAY_TERMINALS.t2),
+      closed,
+    },
+  ];
+}
 
 /**
  * Clamps a number into [min, max], centering when the range is empty.
@@ -701,6 +742,7 @@ function findClosestSegmentIndex(
 type LabLayerProps = {
   pressed: PressedState;
   switchClosed: boolean;
+  threeWayClosed: ThreeWayClosedState;
   positions: Record<ModuleId, Point>;
   wires: Wire[];
   selectedWireId: string | null;
@@ -708,6 +750,7 @@ type LabLayerProps = {
   lampLit: boolean;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
   onSwitchClosedChange: (id: "switch", closed: boolean) => void;
+  onThreeWayClosedChange: (id: ThreeWayId, closed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
   onWireSelect: (
@@ -735,6 +778,7 @@ type LabLayerProps = {
 const LabLayer = memo(function LabLayer({
   pressed,
   switchClosed,
+  threeWayClosed,
   positions,
   wires,
   selectedWireId,
@@ -742,6 +786,7 @@ const LabLayer = memo(function LabLayer({
   lampLit,
   onPressedChange,
   onSwitchClosedChange,
+  onThreeWayClosedChange,
   onModuleDragMove,
   onModuleDragEnd,
   onWireSelect,
@@ -945,6 +990,26 @@ const LabLayer = memo(function LabLayer({
         onDragMove={onModuleDragMove}
         onDragEnd={onModuleDragEnd}
       />
+      <ThreeWaySwitch
+        id="threeWay1"
+        x={positions.threeWay1.x}
+        y={positions.threeWay1.y}
+        title="3-Way 1"
+        closed={threeWayClosed.threeWay1}
+        onClosedChange={onThreeWayClosedChange}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+      />
+      <ThreeWaySwitch
+        id="threeWay2"
+        x={positions.threeWay2.x}
+        y={positions.threeWay2.y}
+        title="3-Way 2"
+        closed={threeWayClosed.threeWay2}
+        onClosedChange={onThreeWayClosedChange}
+        onDragMove={onModuleDragMove}
+        onDragEnd={onModuleDragEnd}
+      />
       <Power
         id="power"
         x={positions.power.x}
@@ -990,6 +1055,10 @@ export function App() {
     rear: false,
   });
   const [switchClosed, setSwitchClosed] = useState(false);
+  const [threeWayClosed, setThreeWayClosed] = useState<ThreeWayClosedState>({
+    threeWay1: false,
+    threeWay2: false,
+  });
   const [view, setView] = useState<ViewState>(INITIAL_VIEW);
   const [contentBounds, setContentBounds] = useState<ContentBounds>(
     INITIAL_CONTENT_BOUNDS,
@@ -1036,8 +1105,10 @@ export function App() {
         b: terminalKey("switch", "top", SWITCH_TERMINALS.no),
         closed: switchClosed,
       },
+      ...threeWayContinuityGates("threeWay1", threeWayClosed.threeWay1),
+      ...threeWayContinuityGates("threeWay2", threeWayClosed.threeWay2),
     ];
-  }, [pressed, switchClosed]);
+  }, [pressed, switchClosed, threeWayClosed]);
 
   const lampLit = useMemo(
     () =>
@@ -1119,13 +1190,30 @@ export function App() {
       .map(([id]) => id);
     if (active.length > 0) return `Pressed: ${active.join(", ")}`;
     if (switchClosed) return "Switch closed";
+    const threeOnT2 = (
+      Object.entries(threeWayClosed) as [ThreeWayId, boolean][]
+    )
+      .filter(([, closed]) => closed)
+      .map(([id]) => id);
+    if (threeOnT2.length > 0) {
+      return `3-way on T2: ${threeOnT2.join(", ")}`;
+    }
     if (lampLit) return "Lamp is lit";
     if (wires.length > 0) {
       const nodes = adjacency.size;
       return `${wires.length} wire${wires.length === 1 ? "" : "s"} · ${nodes} connected terminal${nodes === 1 ? "" : "s"}`;
     }
     return "Idle — drag or click terminals to wire";
-  }, [adjacency, draft, lampLit, pressed, selectedWireId, switchClosed, wires.length]);
+  }, [
+    adjacency,
+    draft,
+    lampLit,
+    pressed,
+    selectedWireId,
+    switchClosed,
+    threeWayClosed,
+    wires.length,
+  ]);
 
   /**
    * Updates one button's pressed flag.
@@ -1141,6 +1229,16 @@ export function App() {
   const setSwitchClosedChange = useCallback(
     (_id: "switch", closed: boolean) => {
       setSwitchClosed(closed);
+    },
+    [],
+  );
+
+  /**
+   * Updates a three-way throw (false = T1, true = T2).
+   */
+  const setThreeWayClosedChange = useCallback(
+    (id: ThreeWayId, closed: boolean) => {
+      setThreeWayClosed((prev) => ({ ...prev, [id]: closed }));
     },
     [],
   );
@@ -1744,6 +1842,7 @@ export function App() {
               <LabLayer
                 pressed={pressed}
                 switchClosed={switchClosed}
+                threeWayClosed={threeWayClosed}
                 positions={positions}
                 wires={wires}
                 selectedWireId={selectedWireId}
@@ -1751,6 +1850,7 @@ export function App() {
                 lampLit={lampLit}
                 onPressedChange={setButtonPressed}
                 onSwitchClosedChange={setSwitchClosedChange}
+                onThreeWayClosedChange={setThreeWayClosedChange}
                 onModuleDragMove={handleModuleDragMove}
                 onModuleDragEnd={handleModuleDragEnd}
                 onWireSelect={handleWireSelect}
