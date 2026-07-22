@@ -201,6 +201,28 @@ function ColorMoreIcon() {
   );
 }
 
+/**
+ * X icon for dismissing the wire actions menu.
+ */
+function CloseIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3.5 3.5 10.5 10.5M10.5 3.5 3.5 10.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 type WireActionsMenuProps = {
   menu: WireMenu;
   /** Stage-container pixel position of the world anchor. */
@@ -323,6 +345,16 @@ function WireActionsMenu({
             style={{ backgroundColor: current.hex }}
           />
           <ColorMoreIcon />
+        </button>
+        <button
+          type="button"
+          className="wire-menu-item"
+          role="menuitem"
+          aria-label="Close"
+          title="Close"
+          onClick={onDismiss}
+        >
+          <CloseIcon />
         </button>
       </div>
       {menu.colorPickerOpen ? (
