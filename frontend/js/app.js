@@ -19,12 +19,19 @@ import {
   STAGE_DEFAULT_CURSOR,
   applyViewToStage,
   boundsFromClientRect,
+  centerBetween,
   clampView,
+  distanceBetween,
   normalizeWheelDeltas,
+  pinchZoomView,
   pointerToWorld,
+  stagePointsFromTouches,
   worldToPointer,
   zoomAt,
 } from "./canvas-nav.js";
+
+// Keep receiving touchmove while a component is dragging so pinch can take over.
+Konva.hitOnDragEnabled = true;
 
 /**
  * Boots the doorbell circuit lab inside a host element using a YAML-derived config.
@@ -109,8 +116,22 @@ export function bootCircuitLab(host, config) {
     maxY: stage.height(),
   };
   let suppressStageClick = false;
+  /** @type {{ x: number; y: number }|null} */
+  let pinchLastCenter = null;
+  let pinchLastDist = 0;
 
   stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+
+  /**
+   * Stops any in-progress empty-canvas pan listeners and UI.
+   */
+  function endStagePan() {
+    stage.off(".stagePan");
+    if (stageWrap) {
+      stageWrap.classList.remove("lab-stage-wrap--panning");
+    }
+    stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+  }
 
   /**
    * Returns the current stage pixel size.
@@ -1138,6 +1159,11 @@ export function bootCircuitLab(host, config) {
      * @param {Konva.KonvaEventObject} evt - Move event.
      */
     function onMove(evt) {
+      // Two-finger pinch owns the gesture; leave one-finger pan alone.
+      if (evt.evt.touches && evt.evt.touches.length >= 2) {
+        endStagePan();
+        return;
+      }
       evt.evt.preventDefault();
       const pos = stage.getPointerPosition();
       if (!pos) {
@@ -1168,19 +1194,78 @@ export function bootCircuitLab(host, config) {
      * Ends the pan gesture.
      */
     function onUp() {
-      stage.off(".stagePan");
-      if (stageWrap) {
-        stageWrap.classList.remove("lab-stage-wrap--panning");
-      }
-      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
+      endStagePan();
     }
 
     stage.on("mousemove.stagePan touchmove.stagePan", onMove);
     stage.on("mouseup.stagePan touchend.stagePan", onUp);
   }
 
+  /**
+   * Two-finger pinch zoom (and pan with the midpoint) anywhere on the stage.
+   * @param {Konva.KonvaEventObject} e - Touch move event.
+   */
+  function handlePinchMove(e) {
+    const touches = e.evt.touches;
+    if (!touches || touches.length < 2) {
+      return;
+    }
+    e.evt.preventDefault();
+    endStagePan();
+    suppressStageClick = true;
+
+    const points = stagePointsFromTouches(
+      touches,
+      stage.container().getBoundingClientRect()
+    );
+    const newCenter = centerBetween(points[0], points[1]);
+    const dist = distanceBetween(points[0], points[1]);
+
+    if (!pinchLastCenter || !(pinchLastDist > 0)) {
+      // First pinch frame: stop any one-finger component drag fighting the gesture.
+      let node = e.target;
+      while (node && node !== stage) {
+        if (node.isDragging && node.isDragging()) {
+          node.stopDrag();
+        }
+        node = node.getParent();
+      }
+      pinchLastCenter = newCenter;
+      pinchLastDist = dist;
+      return;
+    }
+
+    setView(
+      pinchZoomView(
+        view,
+        pinchLastCenter,
+        pinchLastDist,
+        newCenter,
+        dist,
+        viewportSize(),
+        contentBounds
+      )
+    );
+    pinchLastCenter = newCenter;
+    pinchLastDist = dist;
+  }
+
+  /**
+   * Clears pinch state once fewer than two fingers remain.
+   * @param {Konva.KonvaEventObject} e - Touch end/cancel event.
+   */
+  function handlePinchEnd(e) {
+    const touches = e.evt.touches;
+    if (!touches || touches.length < 2) {
+      pinchLastCenter = null;
+      pinchLastDist = 0;
+    }
+  }
+
   stage.on("wheel", handleWheel);
   stage.on("mousedown touchstart", handleStagePointerDown);
+  stage.on("touchmove", handlePinchMove);
+  stage.on("touchend touchcancel", handlePinchEnd);
 
   stage.on("click tap", function (e) {
     if (e.target !== stage) {

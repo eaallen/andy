@@ -1,4 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import type { Node as KonvaNode } from "konva/lib/Node";
@@ -59,6 +60,9 @@ const WIRE_STROKE_WIDTH_SELECTED = 5;
 const WIRE_UNDERSTROKE_PAD = 5;
 /** Matches `.stage-wrap` background so the halo looks like a canvas cutout. */
 const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
+
+// Keep receiving touchmove while a module is dragging so pinch can take over.
+Konva.hitOnDragEnabled = true;
 
 type ButtonId = "front" | "rear";
 type ThreeWayId = "threeWay1" | "threeWay2";
@@ -600,6 +604,76 @@ function zoomAt(
 }
 
 /**
+ * Euclidean distance between two stage-container points.
+ */
+function distanceBetween(a: Point, b: Point) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Midpoint between two stage-container points.
+ */
+function centerBetween(a: Point, b: Point): Point {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
+}
+
+/**
+ * Converts native touches into stage-container coordinates.
+ */
+function stagePointsFromTouches(
+  touches: TouchList,
+  rect: { left: number; top: number },
+): Point[] {
+  const points: Point[] = [];
+  for (let i = 0; i < touches.length; i++) {
+    const touch = touches[i];
+    points.push({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    });
+  }
+  return points;
+}
+
+/**
+ * Applies one frame of two-finger pinch (zoom + pan with the midpoint).
+ */
+function pinchZoomView(
+  view: ViewState,
+  lastCenter: Point,
+  lastDist: number,
+  newCenter: Point,
+  newDist: number,
+  viewport: StageSize,
+  content: ContentBounds,
+): ViewState {
+  if (!(lastDist > 0) || !(newDist > 0)) {
+    return view;
+  }
+  const zoomed = zoomAt(
+    view,
+    newCenter,
+    view.scale * (newDist / lastDist),
+    viewport,
+    content,
+  );
+  return clampView(
+    {
+      scale: zoomed.scale,
+      x: zoomed.x + (newCenter.x - lastCenter.x),
+      y: zoomed.y + (newCenter.y - lastCenter.y),
+    },
+    viewport,
+    content,
+  );
+}
+
+/**
  * Converts a stage pointer into world (layer) coordinates.
  */
 function pointerToWorld(
@@ -1043,6 +1117,8 @@ export function App() {
   const positionsRef = useRef(INITIAL_POSITIONS);
   /** True after an empty-canvas drag so the following click does not clear selection. */
   const suppressStageClickRef = useRef(false);
+  /** Previous pinch midpoint / distance while two fingers are down. */
+  const pinchRef = useRef<{ center: Point; dist: number } | null>(null);
   /**
    * True after an outside press dismisses the wire menu, so a following wire
    * click in the same gesture does not immediately reopen it.
@@ -1640,9 +1716,23 @@ export function App() {
       let panning = false;
 
       /**
+       * Stops any in-progress empty-canvas pan listeners and UI.
+       */
+      function endStagePan() {
+        stageNode.off(".stagePan");
+        wrapRef.current?.classList.remove("stage-wrap--panning");
+        stageNode.container().style.cursor = STAGE_DEFAULT_CURSOR;
+      }
+
+      /**
        * Pans the view by the pointer delta (content follows the drag).
        */
       function onMove(evt: KonvaEventObject<MouseEvent | TouchEvent>) {
+        // Two-finger pinch owns the gesture; leave one-finger pan alone.
+        if ("touches" in evt.evt && evt.evt.touches.length >= 2) {
+          endStagePan();
+          return;
+        }
         evt.evt.preventDefault();
         const pos = stageNode.getPointerPosition();
         if (!pos) return;
@@ -1671,20 +1761,72 @@ export function App() {
         );
       }
 
-      /**
-       * Ends the pan gesture.
-       */
-      function onUp() {
-        stageNode.off(".stagePan");
-        wrapRef.current?.classList.remove("stage-wrap--panning");
-        stageNode.container().style.cursor = STAGE_DEFAULT_CURSOR;
-      }
-
       stageNode.on("mousemove.stagePan touchmove.stagePan", onMove);
-      stageNode.on("mouseup.stagePan touchend.stagePan", onUp);
+      stageNode.on("mouseup.stagePan touchend.stagePan", endStagePan);
     },
     [size],
   );
+
+  /**
+   * Two-finger pinch zoom (and pan with the midpoint) anywhere on the stage.
+   */
+  const handlePinchMove = useCallback(
+    (e: KonvaEventObject<TouchEvent>) => {
+      const touches = e.evt.touches;
+      if (touches.length < 2) return;
+      e.evt.preventDefault();
+
+      const stageNode = e.target.getStage();
+      if (!stageNode) return;
+      stageNode.off(".stagePan");
+      wrapRef.current?.classList.remove("stage-wrap--panning");
+      stageNode.container().style.cursor = STAGE_DEFAULT_CURSOR;
+      suppressStageClickRef.current = true;
+
+      const points = stagePointsFromTouches(
+        touches,
+        stageNode.container().getBoundingClientRect(),
+      );
+      const newCenter = centerBetween(points[0], points[1]);
+      const dist = distanceBetween(points[0], points[1]);
+      const prev = pinchRef.current;
+
+      if (!prev || !(prev.dist > 0)) {
+        let node: KonvaNode | null = e.target;
+        while (node && node !== stageNode) {
+          if (node.isDragging()) {
+            node.stopDrag();
+          }
+          node = node.getParent();
+        }
+        pinchRef.current = { center: newCenter, dist };
+        return;
+      }
+
+      setView((current) =>
+        pinchZoomView(
+          current,
+          prev.center,
+          prev.dist,
+          newCenter,
+          dist,
+          size,
+          contentBoundsRef.current,
+        ),
+      );
+      pinchRef.current = { center: newCenter, dist };
+    },
+    [size],
+  );
+
+  /**
+   * Clears pinch state once fewer than two fingers remain.
+   */
+  function handlePinchEnd(e: KonvaEventObject<TouchEvent>) {
+    if (e.evt.touches.length < 2) {
+      pinchRef.current = null;
+    }
+  }
 
   /**
    * Clears button presses, wires, selection, and any in-progress draft.
@@ -1833,6 +1975,9 @@ export function App() {
               onWheel={handleWheel}
               onMouseDown={handleStagePointerDown}
               onTouchStart={handleStagePointerDown}
+              onTouchMove={handlePinchMove}
+              onTouchEnd={handlePinchEnd}
+              onTouchCancel={handlePinchEnd}
               onMouseLeave={(e) => {
                 setStageCursor(e, STAGE_DEFAULT_CURSOR);
               }}

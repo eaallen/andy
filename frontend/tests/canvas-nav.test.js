@@ -7,11 +7,15 @@ import {
   MIN_SCALE,
   applyViewToStage,
   boundsFromClientRect,
+  centerBetween,
   clampRange,
   clampScale,
   clampView,
+  distanceBetween,
   normalizeWheelDeltas,
+  pinchZoomView,
   pointerToWorld,
+  stagePointsFromTouches,
   worldToPointer,
   zoomAt,
 } from "../js/canvas-nav.js";
@@ -123,6 +127,70 @@ describe("normalizeWheelDeltas", () => {
     expect(
       normalizeWheelDeltas({ deltaX: 3, deltaY: -4, deltaMode: 0 }, viewport)
     ).toEqual({ deltaX: 3, deltaY: -4 });
+  });
+});
+
+describe("pinch helpers", () => {
+  it("measures distance and midpoint between points", () => {
+    expect(distanceBetween({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+    expect(centerBetween({ x: 0, y: 0 }, { x: 10, y: 20 })).toEqual({
+      x: 5,
+      y: 10,
+    });
+  });
+
+  it("maps touches into stage-container coordinates", () => {
+    expect(
+      stagePointsFromTouches(
+        [
+          { clientX: 110, clientY: 220 },
+          { clientX: 130, clientY: 240 },
+        ],
+        { left: 100, top: 200 }
+      )
+    ).toEqual([
+      { x: 10, y: 20 },
+      { x: 30, y: 40 },
+    ]);
+  });
+
+  it("zooms around the pinch midpoint and follows center motion", () => {
+    const lastCenter = { x: 200, y: 150 };
+    const newCenter = { x: 210, y: 160 };
+    const before = pointerToWorld(newCenter, INITIAL_VIEW);
+    const next = pinchZoomView(
+      INITIAL_VIEW,
+      lastCenter,
+      100,
+      newCenter,
+      200,
+      viewport,
+      content
+    );
+    // Scale doubles; world point under newCenter stays put before the pan delta.
+    expect(next.scale).toBeCloseTo(2, 5);
+    const afterZoomOnly = zoomAt(INITIAL_VIEW, newCenter, 2, viewport, content);
+    expect(next.x).toBeCloseTo(afterZoomOnly.x + 10, 5);
+    expect(next.y).toBeCloseTo(afterZoomOnly.y + 10, 5);
+    // Sanity: zooming alone would keep before under newCenter; pan then shifts view.
+    const after = pointerToWorld(newCenter, next);
+    expect(after.x).toBeCloseTo(before.x - 10 / next.scale, 5);
+    expect(after.y).toBeCloseTo(before.y - 10 / next.scale, 5);
+  });
+
+  it("returns the view unchanged for a zero distance frame", () => {
+    const view = { scale: 1.2, x: 5, y: 6 };
+    expect(
+      pinchZoomView(
+        view,
+        { x: 0, y: 0 },
+        0,
+        { x: 10, y: 10 },
+        50,
+        viewport,
+        content
+      )
+    ).toEqual(view);
   });
 });
 

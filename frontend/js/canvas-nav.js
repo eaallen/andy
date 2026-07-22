@@ -156,3 +156,83 @@ export function applyViewToStage(stage, view) {
   stage.scale({ x: view.scale, y: view.scale });
   stage.position({ x: view.x, y: view.y });
 }
+
+/**
+ * Euclidean distance between two stage-container points.
+ * @param {Point} a - First point.
+ * @param {Point} b - Second point.
+ */
+export function distanceBetween(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Midpoint between two stage-container points.
+ * @param {Point} a - First point.
+ * @param {Point} b - Second point.
+ */
+export function centerBetween(a, b) {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
+}
+
+/**
+ * Converts native touches into stage-container coordinates.
+ * @param {TouchList|ArrayLike<{ clientX: number; clientY: number }>} touches - Active touches.
+ * @param {{ left: number; top: number }} rect - Stage container bounding rect.
+ */
+export function stagePointsFromTouches(touches, rect) {
+  const points = [];
+  for (let i = 0; i < touches.length; i++) {
+    const touch = touches[i];
+    points.push({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    });
+  }
+  return points;
+}
+
+/**
+ * Applies one frame of two-finger pinch (zoom + pan with the midpoint).
+ * @param {ViewState} view - Current camera.
+ * @param {Point} lastCenter - Previous pinch midpoint (stage px).
+ * @param {number} lastDist - Previous finger distance (stage px).
+ * @param {Point} newCenter - Current pinch midpoint (stage px).
+ * @param {number} newDist - Current finger distance (stage px).
+ * @param {StageSize} viewport - Stage pixel size.
+ * @param {ContentBounds} content - World-space content AABB.
+ */
+export function pinchZoomView(
+  view,
+  lastCenter,
+  lastDist,
+  newCenter,
+  newDist,
+  viewport,
+  content
+) {
+  if (!(lastDist > 0) || !(newDist > 0)) {
+    return view;
+  }
+  const zoomed = zoomAt(
+    view,
+    newCenter,
+    view.scale * (newDist / lastDist),
+    viewport,
+    content
+  );
+  return clampView(
+    {
+      scale: zoomed.scale,
+      x: zoomed.x + (newCenter.x - lastCenter.x),
+      y: zoomed.y + (newCenter.y - lastCenter.y),
+    },
+    viewport,
+    content
+  );
+}
