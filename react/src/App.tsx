@@ -271,10 +271,12 @@ type LabLayerProps = {
   pressed: PressedState;
   positions: Record<ModuleId, Point>;
   wires: Wire[];
+  selectedWireId: string | null;
   draft: WireDraft | null;
   onPressedChange: (id: ButtonId, pressed: boolean) => void;
   onModuleDragMove: (id: string, x: number, y: number) => void;
   onModuleDragEnd: (id: string, x: number, y: number) => void;
+  onWireSelect: (id: string) => void;
   onContentBoundsChange: () => void;
 };
 
@@ -286,10 +288,12 @@ const LabLayer = memo(function LabLayer({
   pressed,
   positions,
   wires,
+  selectedWireId,
   draft,
   onPressedChange,
   onModuleDragMove,
   onModuleDragEnd,
+  onWireSelect,
   onContentBoundsChange,
 }: LabLayerProps) {
   const wirePoints = wires
@@ -310,17 +314,29 @@ const LabLayer = memo(function LabLayer({
 
   return (
     <Layer onDragEnd={onContentBoundsChange}>
-      {wirePoints.map((wire) => (
-        <Line
-          key={wire.id}
-          points={wire.points}
-          stroke="#334155"
-          strokeWidth={3}
-          lineCap="round"
-          lineJoin="round"
-          listening={false}
-        />
-      ))}
+      {wirePoints.map((wire) => {
+        const selected = wire.id === selectedWireId;
+        return (
+          <Line
+            key={wire.id}
+            name={`wire-${wire.id}`}
+            points={wire.points}
+            stroke={selected ? "#2563eb" : "#334155"}
+            strokeWidth={selected ? 5 : 3}
+            hitStrokeWidth={16}
+            lineCap="round"
+            lineJoin="round"
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onWireSelect(wire.id);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              onWireSelect(wire.id);
+            }}
+          />
+        );
+      })}
       {draftPoints ? (
         <Line
           points={draftPoints}
@@ -395,6 +411,7 @@ export function App() {
   const [positions, setPositions] =
     useState<Record<ModuleId, Point>>(INITIAL_POSITIONS);
   const [wires, setWires] = useState<Wire[]>([]);
+  const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [draft, setDraft] = useState<WireDraft | null>(null);
 
   contentBoundsRef.current = contentBounds;
@@ -471,15 +488,18 @@ export function App() {
     if (draft?.kind === "drag") {
       return "Drop on a terminal to connect";
     }
+    if (selectedWireId) {
+      return "Wire selected — Delete to remove, Esc to deselect";
+    }
     const active = Object.entries(pressed)
       .filter(([, isDown]) => isDown)
       .map(([id]) => id);
     if (active.length > 0) return `Pressed: ${active.join(", ")}`;
     if (wires.length > 0) {
-      return `${wires.length} wire${wires.length === 1 ? "" : "s"} — drag or click terminals`;
+      return `${wires.length} wire${wires.length === 1 ? "" : "s"} — click a wire to select`;
     }
     return "Idle — drag or click terminals to wire";
-  }, [draft, pressed, wires.length]);
+  }, [draft, pressed, selectedWireId, wires.length]);
 
   /**
    * Updates one button's pressed flag.
@@ -517,6 +537,7 @@ export function App() {
    */
   const connectTerminals = useCallback((from: string, to: string) => {
     if (from === to) return;
+    setSelectedWireId(null);
     setWires((prev) => {
       if (hasWireBetween(prev, from, to)) return prev;
       return [
@@ -531,6 +552,15 @@ export function App() {
   }, []);
 
   /**
+   * Selects a wire and clears any in-progress draft.
+   */
+  const handleWireSelect = useCallback((id: string) => {
+    setDraft(null);
+    gestureRef.current = null;
+    setSelectedWireId(id);
+  }, []);
+
+  /**
    * Starts a click-or-drag wire gesture from a terminal.
    */
   const handleTerminalPointerDown = useCallback(
@@ -540,6 +570,8 @@ export function App() {
       const stageNode: KonvaStage = maybeStage;
       const pointer = stageNode.getPointerPosition();
       if (!pointer) return;
+
+      setSelectedWireId(null);
 
       gestureRef.current = {
         from: terminalId,
@@ -621,24 +653,63 @@ export function App() {
   );
 
   /**
-   * Clears pending wire selection when clicking empty stage space.
+   * Clears pending wire selection or selected wire when clicking empty stage space.
    */
   function handleStageClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
     if (e.target !== e.target.getStage()) return;
     if (draftRef.current?.kind === "pending") {
       setDraft(null);
     }
+    setSelectedWireId(null);
   }
 
   /**
-   * Clears button presses, wires, and any in-progress draft.
+   * Clears button presses, wires, selection, and any in-progress draft.
    */
   function reset() {
     setPressed({ front: false, rear: false });
     setWires([]);
+    setSelectedWireId(null);
     setDraft(null);
     gestureRef.current = null;
   }
+
+  // Keyboard: Escape clears selection/draft; Delete removes the selected wire.
+  useEffect(() => {
+    /**
+     * Handles Escape / Delete / Backspace for wire selection.
+     */
+    function onKeyDown(evt: KeyboardEvent) {
+      const target = evt.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (evt.key === "Escape") {
+        setDraft(null);
+        setSelectedWireId(null);
+        gestureRef.current = null;
+        return;
+      }
+
+      if (
+        (evt.key === "Delete" || evt.key === "Backspace") &&
+        selectedWireId
+      ) {
+        evt.preventDefault();
+        setWires((prev) => prev.filter((w) => w.id !== selectedWireId));
+        setSelectedWireId(null);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedWireId]);
 
   /**
    * Zooms toward the stage center by a fixed step.
@@ -745,10 +816,12 @@ export function App() {
                 pressed={pressed}
                 positions={positions}
                 wires={wires}
+                selectedWireId={selectedWireId}
                 draft={draft}
                 onPressedChange={setButtonPressed}
                 onModuleDragMove={handleModuleDragMove}
                 onModuleDragEnd={handleModuleDragEnd}
+                onWireSelect={handleWireSelect}
                 onContentBoundsChange={syncContentBounds}
               />
             </Stage>
