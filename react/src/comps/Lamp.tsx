@@ -11,7 +11,7 @@ type LampProps<Id extends string = string> = {
   x: number;
   y: number;
   title?: string;
-  /** True when the lamp has both hot and return continuity (energized). */
+  /** True when either polarity bridges supply hot and return (energized). */
   lit: boolean;
   onDragMove?: (id: Id, x: number, y: number) => void;
   onDragEnd?: (id: Id, x: number, y: number) => void;

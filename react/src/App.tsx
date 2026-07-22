@@ -458,7 +458,10 @@ const LAB_SUPPLY = {
   return: terminalKey("power", "top", POWER_TERMINALS.neutral),
 } as const;
 
-/** Lamp load endpoints (hot + neutral). */
+/**
+ * Lamp load endpoints. Energize is polarity-agnostic; labeled orientation
+ * is available for grading via `isLoadPolarityCorrect`.
+ */
 const LAB_LAMP_LOAD = {
   requireHot: terminalKey("lamp", "bottom", LAMP_TERMINALS.hot),
   signal: terminalKey("lamp", "bottom", LAMP_TERMINALS.neutral),

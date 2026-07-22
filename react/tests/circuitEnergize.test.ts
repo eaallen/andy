@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isLoadEnergized } from "../src/circuit/energize";
+import {
+  isLoadEnergized,
+  isLoadPolarityCorrect,
+} from "../src/circuit/energize";
 import {
   bridgeEdgesForClosed,
   buildAdjacency,
@@ -22,6 +25,15 @@ describe("isLoadEnergized", () => {
     const wires: WireEdge[] = [
       { from: "power:top:0", to: "lamp:bottom:0" },
       { from: "power:top:1", to: "lamp:bottom:1" },
+    ];
+    const adj = buildAdjacency(wires);
+    expect(isLoadEnergized(adj, SUPPLY, LAMP)).toBe(true);
+  });
+
+  it("lights when hot and neutral are swapped (real-life polarity)", () => {
+    const wires: WireEdge[] = [
+      { from: "power:top:0", to: "lamp:bottom:1" },
+      { from: "power:top:1", to: "lamp:bottom:0" },
     ];
     const adj = buildAdjacency(wires);
     expect(isLoadEnergized(adj, SUPPLY, LAMP)).toBe(true);
@@ -72,5 +84,34 @@ describe("isLoadEnergized", () => {
     expect(
       isLoadEnergized(adj, { hot: [], return: SUPPLY.return }, LAMP),
     ).toBe(false);
+  });
+});
+
+describe("isLoadPolarityCorrect", () => {
+  it("passes for labeled hot→hot and COM→neutral wiring", () => {
+    const wires: WireEdge[] = [
+      { from: "power:top:0", to: "lamp:bottom:0" },
+      { from: "power:top:1", to: "lamp:bottom:1" },
+    ];
+    const adj = buildAdjacency(wires);
+    expect(isLoadPolarityCorrect(adj, SUPPLY, LAMP)).toBe(true);
+  });
+
+  it("fails when hot and neutral are swapped even if the lamp would light", () => {
+    const wires: WireEdge[] = [
+      { from: "power:top:0", to: "lamp:bottom:1" },
+      { from: "power:top:1", to: "lamp:bottom:0" },
+    ];
+    const adj = buildAdjacency(wires);
+    expect(isLoadEnergized(adj, SUPPLY, LAMP)).toBe(true);
+    expect(isLoadPolarityCorrect(adj, SUPPLY, LAMP)).toBe(false);
+  });
+
+  it("fails when a required leg is missing", () => {
+    const wires: WireEdge[] = [
+      { from: "power:top:0", to: "lamp:bottom:0" },
+    ];
+    const adj = buildAdjacency(wires);
+    expect(isLoadPolarityCorrect(adj, SUPPLY, LAMP)).toBe(false);
   });
 });

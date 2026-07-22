@@ -1,8 +1,14 @@
 import {
   areConnected,
   buildAdjacency,
+  type Adjacency,
   type WireEdge,
 } from "./graph";
+import {
+  isLoadPolarityCorrect,
+  type LoadRefs,
+  type SupplyRefs,
+} from "./energize";
 
 /** Expected wire-path continuity between two terminals. */
 export type ContinuityCheck = {
@@ -41,4 +47,20 @@ export function gradeContinuity(
     ok: failures.length === 0,
     failures,
   };
+}
+
+/**
+ * Deducts when a load is wired with reversed hot/neutral polarity.
+ * Visual energize may still light; this is a labeling / best-practice check.
+ */
+export function gradeLoadPolarity(
+  adj: Adjacency,
+  supply: SupplyRefs,
+  load: LoadRefs,
+  fail = "Load hot and neutral are reversed.",
+): ContinuityGrade {
+  if (isLoadPolarityCorrect(adj, supply, load)) {
+    return { ok: true, failures: [] };
+  }
+  return { ok: false, failures: [fail] };
 }
