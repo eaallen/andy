@@ -1,9 +1,11 @@
-import { Circle } from "react-konva";
+import { Circle, Text } from "react-konva";
 import { Module } from "./Module";
 
-const WIDTH = 160;
-const HEIGHT = 120;
-const TERMINAL_RADIUS = 7;
+const WIDTH = 100;
+const HEIGHT = 84;
+const PAD_RADIUS = 16;
+const BEZEL_RADIUS = 20;
+const PAD_CENTER_Y = 46;
 
 type DoorbellButtonProps<Id extends string = string> = {
   id: Id;
@@ -15,9 +17,8 @@ type DoorbellButtonProps<Id extends string = string> = {
 };
 
 /**
- * Declarative doorbell button — press target and terminals inside a Module shell.
- * Mirrors the imperative Konva button shape with React state instead of
- * mutating node attributes by hand.
+ * Declarative doorbell button — raised press pad inside a Module shell.
+ * Connection nodes come from Module.
  */
 export function DoorbellButton<Id extends string>({
   id,
@@ -27,9 +28,25 @@ export function DoorbellButton<Id extends string>({
   pressed,
   onPressedChange,
 }: DoorbellButtonProps<Id>) {
-  const fill = pressed ? "#bae6fd" : "#f0f9ff";
-  const stroke = pressed ? "#0284c7" : "#7dd3fc";
-  const padFill = pressed ? "#0369a1" : "#38bdf8";
+  const fill = pressed ? "#dbeafe" : "#f0f9ff";
+  const stroke = pressed ? "#2563eb" : "#7dd3fc";
+  const padY = pressed ? PAD_CENTER_Y + 2 : PAD_CENTER_Y;
+  const padFill = pressed ? "#1d4ed8" : "#3b82f6";
+  const padStroke = pressed ? "#1e3a8a" : "#1d4ed8";
+
+  /**
+   * Marks the doorbell as pressed.
+   */
+  function press() {
+    onPressedChange(id, true);
+  }
+
+  /**
+   * Clears the pressed state.
+   */
+  function release() {
+    onPressedChange(id, false);
+  }
 
   return (
     <Module
@@ -40,37 +57,64 @@ export function DoorbellButton<Id extends string>({
       title={title}
       fill={fill}
       stroke={stroke}
+      terminals={{ top: 3 }}
     >
+      {/* Metal-ish bezel around the button */}
       <Circle
         x={WIDTH / 2}
-        y={HEIGHT / 2 + 8}
-        radius={22}
+        y={PAD_CENTER_Y}
+        radius={BEZEL_RADIUS}
+        fill="#cbd5e1"
+        stroke="#64748b"
+        strokeWidth={1.5}
+        listening={false}
+      />
+      <Circle
+        x={WIDTH / 2}
+        y={PAD_CENTER_Y}
+        radius={BEZEL_RADIUS - 3}
+        fill="#e2e8f0"
+        listening={false}
+      />
+      {/* Raised press pad */}
+      <Circle
+        x={WIDTH / 2}
+        y={padY}
+        radius={PAD_RADIUS}
         fill={padFill}
-        stroke="#0c4a6e"
+        stroke={padStroke}
         strokeWidth={2}
-        onMouseDown={() => onPressedChange(id, true)}
-        onMouseUp={() => onPressedChange(id, false)}
-        onMouseLeave={() => onPressedChange(id, false)}
-        onTouchStart={() => onPressedChange(id, true)}
-        onTouchEnd={() => onPressedChange(id, false)}
+        shadowColor="rgba(29, 78, 216, 0.55)"
+        shadowBlur={pressed ? 2 : 8}
+        shadowOffsetY={pressed ? 1 : 3}
+        shadowForStrokeEnabled={false}
+        hitStrokeWidth={8}
+        onMouseDown={press}
+        onMouseUp={release}
+        onMouseLeave={release}
+        onTouchStart={press}
+        onTouchEnd={release}
       />
+      {/* Gloss highlight ring */}
       <Circle
+        x={WIDTH / 2}
+        y={padY - 1}
+        radius={PAD_RADIUS * 0.45}
+        stroke="rgba(255,255,255,0.7)"
+        strokeWidth={1.5}
+        listening={false}
+      />
+      <Text
         x={0}
-        y={HEIGHT / 2}
-        radius={TERMINAL_RADIUS}
-        fill="#f8fafc"
-        stroke="#475569"
-        strokeWidth={2}
-        name="terminal"
-      />
-      <Circle
-        x={WIDTH}
-        y={HEIGHT / 2}
-        radius={TERMINAL_RADIUS}
-        fill="#f8fafc"
-        stroke="#475569"
-        strokeWidth={2}
-        name="terminal"
+        y={PAD_CENTER_Y + PAD_RADIUS + 8}
+        width={WIDTH}
+        align="center"
+        text="Press"
+        fontSize={10}
+        fontFamily="system-ui, Arial, sans-serif"
+        fontStyle="bold"
+        fill="#2563eb"
+        listening={false}
       />
     </Module>
   );
