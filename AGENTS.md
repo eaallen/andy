@@ -14,16 +14,16 @@ This is an **npm workspaces monorepo**:
 ```bash
 npm install
 cp server/.env.example server/.dev.vars   # set GEMINI_API_KEY or META_API_KEY (or AI_PROVIDER=demo)
-# Also set WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_COOKIE_PASSWORD (AuthKit)
+# Also set WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_COOKIE_PASSWORD (WorkOS)
 ```
 
 Requires **Node.js ≥ 20**.
 
 ### Auth (WorkOS)
 
-- Hosted AuthKit; open signup. Users (emails) live in the WorkOS dashboard.
+- Custom on-site UI at `/login` (password + magic code + signup) via WorkOS User Management APIs. Users live in the WorkOS dashboard.
 - Protects `/author` and `POST /api/diagrams/*`. `/` and `/lab` stay public.
-- Local redirect URIs: `http://localhost:6767/callback`, sign-in `/login`, sign-out `/`.
+- Local redirects: callback `http://localhost:6767/callback`, sign-in endpoint `/auth/initiate` (impersonation), sign-out `/`.
 - Export emails: `npm run export:users -w @andy/server > users.csv`
 
 ### Dev
@@ -40,7 +40,7 @@ Routes served by the Worker:
 | `/` | Project marketing site |
 | `/lab` | Circuit lab shell (loads `/andy.js` + `/labs/*.yaml`) |
 | `/author` | Diagram → YAML author UI (auth required) |
-| `/login`, `/callback`, `/logout` | WorkOS AuthKit |
+| `/login`, `/signup` (POST), `/callback`, `/logout`, `/auth/initiate` | On-site WorkOS auth |
 | `/api/diagrams/*` | AI diagram API (auth required) |
 | `/andy.js`, `/labs/*` | Static client lib + lab YAML |
 

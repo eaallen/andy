@@ -17,7 +17,7 @@ export function getWorkOS(env: Env): WorkOS {
 }
 
 /**
- * Resolves the OAuth redirect URI for AuthKit callbacks.
+ * Resolves the OAuth redirect URI for WorkOS callbacks.
  * @param config - Normalized app config.
  * @param origin - Request origin (e.g. http://localhost:6767).
  */

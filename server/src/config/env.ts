@@ -18,7 +18,7 @@ export type Env = {
   WORKOS_COOKIE_PASSWORD?: string;
   /** Optional absolute callback URL; defaults to `{origin}/callback`. */
   WORKOS_REDIRECT_URI?: string;
-  /** WorkOS organization to auto-select for AuthKit (skips org picker). */
+  /** WorkOS organization to auto-select (and add new signups to). */
   WORKOS_ORGANIZATION_ID?: string;
   ASSETS: Fetcher;
 };
@@ -94,7 +94,7 @@ export function getAppConfig(env: Env): AppConfig {
 }
 
 /**
- * Throws when WorkOS AuthKit bindings are incomplete.
+ * Throws when WorkOS auth bindings are incomplete.
  * @param config - Normalized app config.
  */
 export function assertWorkosConfigured(config: AppConfig): void {

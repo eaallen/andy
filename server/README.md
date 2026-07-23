@@ -9,23 +9,26 @@ Cloudflare Worker (Hono + Vite) that serves the Andy site and turns a diagram **
 | `/` | Marketing site (Hono JSX) |
 | `/lab` | Circuit lab shell |
 | `/author` | Diagram → YAML UI (**requires WorkOS login**) |
-| `/login`, `/callback`, `/logout` | WorkOS AuthKit session flow |
+| `/login` | On-site sign-in / sign-up (WorkOS headless APIs) |
+| `/callback`, `/logout`, `/auth/initiate` | OAuth callback, logout, dashboard impersonation |
 | `/api/diagrams/*` | AI API (**requires WorkOS login**) |
 | `/andy.js`, `/labs/*` | Static assets (synced from `@andy/frontend`) |
 
-## Auth (WorkOS AuthKit)
+## Auth (WorkOS User Management)
 
-Open signup via hosted AuthKit. Verified emails appear in the [WorkOS Users](https://dashboard.workos.com) dashboard.
+Sign-in stays on Andy (`/login`): email/password, magic code, and signup. Sessions still use WorkOS sealed cookies. Verified emails appear in the [WorkOS Users](https://dashboard.workos.com) dashboard.
+
+Enable **Email + Password** and **Magic Auth** under Authentication in the WorkOS dashboard.
 
 Local redirects to configure in the WorkOS dashboard:
 
 - Redirect URI: `http://localhost:6767/callback`
-- Sign-in endpoint: `http://localhost:6767/login`
+- Sign-in endpoint: `http://localhost:6767/auth/initiate` (dashboard impersonation only)
 - Sign-out redirect: `http://localhost:6767/`
 
 Set `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, and `WORKOS_COOKIE_PASSWORD` (≥32 chars) in `.dev.vars`.
 
-Set `WORKOS_ORGANIZATION_ID` to the Andy organization (`org_…` from Dashboard → Organizations) so AuthKit skips the org picker for users who start login from Andy.
+Set `WORKOS_ORGANIZATION_ID` to the Andy organization (`org_…` from Dashboard → Organizations) so multi-org users are auto-selected and new signups are added to that org.
 
 Export all user emails to CSV:
 
