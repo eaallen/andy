@@ -1,15 +1,22 @@
 import type { FC } from "hono/jsx";
+import type { SessionUser } from "@/auth/session.js";
 import { Layout } from "@/pages/layout.js";
+
+type PageProps = {
+  user?: SessionUser | null;
+};
 
 /**
  * Author UI — diagram image → lab YAML; client logic in /author-client.js.
+ * @param props - Authenticated user (required for this page).
  */
-export const AuthorPage: FC = () => (
+export const AuthorPage: FC<PageProps> = (props) => (
   <Layout
     title="Andy — Create lab from diagram image"
     active="author"
     stylesheets={["/author.css"]}
     scripts={["/andy.js", "/author-client.js"]}
+    user={props.user}
   >
     <main class="author">
       <header class="author-top">

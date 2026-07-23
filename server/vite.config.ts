@@ -7,6 +7,14 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [cloudflare()],
+  server: {
+    port: 6767,
+    strictPort: true,
+  },
+  preview: {
+    port: 6767,
+    strictPort: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(rootDir, "src"),

@@ -1,4 +1,5 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
+import type { SessionUser } from "@/auth/session.js";
 
 export type NavId = "home" | "lab" | "author";
 
@@ -8,21 +9,24 @@ type LayoutProps = PropsWithChildren<{
   stylesheets?: string[];
   scripts?: string[];
   bodyClass?: string;
+  user?: SessionUser | null;
 }>;
 
 /**
  * Shared HTML shell for marketing, lab, and author pages.
- * @param props - Page title, nav highlight, CSS/JS assets, and body content.
+ * @param props - Page title, nav highlight, CSS/JS assets, optional session user, and body content.
  */
 export const Layout: FC<LayoutProps> = (props) => {
   const sheets = props.stylesheets ?? [];
   const scripts = props.scripts ?? [];
+  const user = props.user ?? null;
   return (
     <html lang="en">
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{props.title}</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -57,6 +61,24 @@ export const Layout: FC<LayoutProps> = (props) => {
               Author
             </a>
           </nav>
+          <div class="site-nav-auth">
+            {user ? (
+              <>
+                <span class="site-nav-email" title={user.email}>
+                  {user.email}
+                </span>
+                <form class="site-nav-logout" method="post" action="/logout">
+                  <button type="submit" class="site-nav-signout">
+                    Sign out
+                  </button>
+                </form>
+              </>
+            ) : (
+              <a class="site-nav-signin" href="/login?returnTo=/author">
+                Sign in
+              </a>
+            )}
+          </div>
         </header>
         {props.children}
         {scripts.map((src) => (

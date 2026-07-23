@@ -13,6 +13,13 @@ export type Env = {
   META_MODEL?: string;
   META_BASE_URL?: string;
   MAX_UPLOAD_BYTES?: string;
+  WORKOS_API_KEY?: string;
+  WORKOS_CLIENT_ID?: string;
+  WORKOS_COOKIE_PASSWORD?: string;
+  /** Optional absolute callback URL; defaults to `{origin}/callback`. */
+  WORKOS_REDIRECT_URI?: string;
+  /** WorkOS organization to auto-select for AuthKit (skips org picker). */
+  WORKOS_ORGANIZATION_ID?: string;
   ASSETS: Fetcher;
 };
 
@@ -28,6 +35,11 @@ export type AppConfig = {
   metaModel: string;
   metaBaseUrl: string;
   maxUploadBytes: number;
+  workosApiKey: string;
+  workosClientId: string;
+  workosCookiePassword: string;
+  workosRedirectUri: string;
+  workosOrganizationId: string;
 };
 
 /**
@@ -73,7 +85,33 @@ export function getAppConfig(env: Env): AppConfig {
     maxUploadBytes:
       Number(optional(env.MAX_UPLOAD_BYTES, String(20 * 1024 * 1024))) ||
       20 * 1024 * 1024,
+    workosApiKey: optional(env.WORKOS_API_KEY),
+    workosClientId: optional(env.WORKOS_CLIENT_ID),
+    workosCookiePassword: optional(env.WORKOS_COOKIE_PASSWORD),
+    workosRedirectUri: optional(env.WORKOS_REDIRECT_URI),
+    workosOrganizationId: optional(env.WORKOS_ORGANIZATION_ID),
   };
+}
+
+/**
+ * Throws when WorkOS AuthKit bindings are incomplete.
+ * @param config - Normalized app config.
+ */
+export function assertWorkosConfigured(config: AppConfig): void {
+  if (!config.workosApiKey || !config.workosClientId || !config.workosCookiePassword) {
+    throw Object.assign(
+      new Error(
+        "WORKOS_API_KEY, WORKOS_CLIENT_ID, and WORKOS_COOKIE_PASSWORD are required for auth.",
+      ),
+      { status: 503, code: "missing_workos_config" },
+    );
+  }
+  if (config.workosCookiePassword.length < 32) {
+    throw Object.assign(
+      new Error("WORKOS_COOKIE_PASSWORD must be at least 32 characters."),
+      { status: 503, code: "invalid_workos_cookie_password" },
+    );
+  }
 }
 
 /**

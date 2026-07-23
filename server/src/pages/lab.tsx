@@ -1,16 +1,23 @@
 import type { FC } from "hono/jsx";
+import type { SessionUser } from "@/auth/session.js";
 import { Layout } from "@/pages/layout.js";
+
+type PageProps = {
+  user?: SessionUser | null;
+};
 
 /**
  * Circuit lab shell — picker UI; mounting is handled by /lab-client.js + andy.js.
+ * @param props - Optional authenticated user for the nav.
  */
-export const LabPage: FC = () => (
+export const LabPage: FC<PageProps> = (props) => (
   <Layout
     title="Circuit Lab — Andy"
     active="lab"
     stylesheets={["/lab.css"]}
     scripts={["/andy.js", "/lab-client.js"]}
     bodyClass="lab-body"
+    user={props.user}
   >
     <div class="app-shell">
       <nav class="lab-picker" aria-label="Choose lab">

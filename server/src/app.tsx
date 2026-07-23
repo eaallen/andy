@@ -2,12 +2,22 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { diagramsRoutes } from "@/routes/diagrams.js";
+import { authRoutes } from "@/routes/auth.js";
 import { getAppConfig, type Env } from "@/config/env.js";
+import { getSessionUser, type SessionUser } from "@/auth/session.js";
+import { requireAuth } from "@/auth/middleware.js";
 import { HomePage } from "@/pages/home.js";
 import { LabPage } from "@/pages/lab.js";
 import { AuthorPage } from "@/pages/author.js";
 
-const app = new Hono<{ Bindings: Env }>();
+type AppEnv = {
+  Bindings: Env;
+  Variables: {
+    user: SessionUser;
+  };
+};
+
+const app = new Hono<AppEnv>();
 
 app.use("*", logger());
 app.use("*", async (c, next) => {
@@ -31,10 +41,24 @@ app.get("/health", (c) => {
   });
 });
 
-app.get("/", (c) => c.html(<HomePage />));
-app.get("/lab", (c) => c.html(<LabPage />));
-app.get("/author", (c) => c.html(<AuthorPage />));
+app.route("/", authRoutes);
 
+app.get("/", async (c) => {
+  const user = await getSessionUser(c);
+  return c.html(<HomePage user={user} />);
+});
+
+app.get("/lab", async (c) => {
+  const user = await getSessionUser(c);
+  return c.html(<LabPage user={user} />);
+});
+
+app.get("/author", requireAuth, async (c) => {
+  const user = c.get("user");
+  return c.html(<AuthorPage user={user} />);
+});
+
+app.use("/api/diagrams/*", requireAuth);
 app.route("/api/diagrams", diagramsRoutes);
 
 /**
@@ -50,6 +74,7 @@ app.notFound(async (c) => {
       <head>
         <meta charset="UTF-8" />
         <title>Not found — Andy</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/site.css" />
       </head>
       <body>

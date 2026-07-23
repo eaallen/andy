@@ -65,10 +65,10 @@ The Worker API accepts an image of a wiring diagram and returns Andy lab YAML.
 # from repo root
 cp server/.env.example server/.dev.vars   # local Worker bindings
 npm install
-npm run dev                               # http://localhost:5173
+npm run dev                               # http://localhost:6767
 ```
 
-Open [/author](http://localhost:5173/author), upload a diagram, then **Open in lab**.
+Open [/author](http://localhost:6767/author), upload a diagram, then **Open in lab**.
 
 ### API
 
@@ -113,7 +113,7 @@ Response:
 ```bash
 npm install
 cp server/.env.example server/.dev.vars
-npm run dev                 # full site + API on :5173
+npm run dev                 # full site + API on :6767
 ```
 
 ### Deploy (Cloudflare)
@@ -130,7 +130,7 @@ Default production `AI_PROVIDER` is `demo` (see `server/wrangler.jsonc`). Set `A
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Worker + site (Vite Cloudflare) at `:5173` |
+| `npm run dev` | Worker + site (Vite Cloudflare) at `:6767` |
 | `npm run dev:frontend` | Frontend Vite only (library experiments) |
 | `npm run build` | Sync assets + build Worker |
 | `npm run build:lib` | Build CDN IIFE `andy.js` |

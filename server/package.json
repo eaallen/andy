@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "export:users": "node ./scripts/export-users.mjs",
     "cf-typegen": "wrangler types"
   },
   "engines": {
@@ -22,6 +23,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
+    "@workos-inc/node": "^10.8.0",
     "hono": "^4.8.3",
     "js-yaml": "^4.3.0",
     "openai": "^6.48.0"

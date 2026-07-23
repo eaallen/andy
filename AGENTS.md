@@ -14,14 +14,22 @@ This is an **npm workspaces monorepo**:
 ```bash
 npm install
 cp server/.env.example server/.dev.vars   # set GEMINI_API_KEY or META_API_KEY (or AI_PROVIDER=demo)
+# Also set WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_COOKIE_PASSWORD (AuthKit)
 ```
 
 Requires **Node.js ≥ 20**.
 
+### Auth (WorkOS)
+
+- Hosted AuthKit; open signup. Users (emails) live in the WorkOS dashboard.
+- Protects `/author` and `POST /api/diagrams/*`. `/` and `/lab` stay public.
+- Local redirect URIs: `http://localhost:6767/callback`, sign-in `/login`, sign-out `/`.
+- Export emails: `npm run export:users -w @andy/server > users.csv`
+
 ### Dev
 
 ```bash
-npm run dev              # Worker + site via Vite (Cloudflare plugin) — http://localhost:5173
+npm run dev              # Worker + site via Vite (Cloudflare plugin) — http://localhost:6767
 npm run dev:frontend     # frontend-only Vite (library / local experiments)
 ```
 
@@ -31,8 +39,9 @@ Routes served by the Worker:
 | --- | --- |
 | `/` | Project marketing site |
 | `/lab` | Circuit lab shell (loads `/andy.js` + `/labs/*.yaml`) |
-| `/author` | Diagram → YAML author UI |
-| `/api/diagrams/*` | AI diagram API |
+| `/author` | Diagram → YAML author UI (auth required) |
+| `/login`, `/callback`, `/logout` | WorkOS AuthKit |
+| `/api/diagrams/*` | AI diagram API (auth required) |
 | `/andy.js`, `/labs/*` | Static client lib + lab YAML |
 
 ### Tests / typecheck / deploy

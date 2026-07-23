@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Andy">
+  <rect width="32" height="32" rx="7" fill="#0f766e"/>
+  <!-- Stylized A: peak + crossbar reads as a wire path -->
+  <path
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M8.5 24.5 16 7.5l7.5 17"
+  />
+  <path
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.75"
+    stroke-linecap="round"
+    d="M11.25 17.75h9.5"
+  />
+  <!-- Terminal dots on the A feet -->
+  <circle cx="8.5" cy="24.5" r="1.65" fill="#fff"/>
+  <circle cx="23.5" cy="24.5" r="1.65" fill="#fff"/>
+</svg>

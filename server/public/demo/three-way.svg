@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="Three-way lamp wiring diagram sketch">
+  <rect width="640" height="400" fill="#f7f3ea"/>
+  <text x="32" y="42" font-family="Georgia, serif" font-size="22" fill="#1c2430">Three-Way Switches to Lamp</text>
+  <text x="32" y="68" font-family="Georgia, serif" font-size="13" fill="#5a6573">Hallway / stair lighting - travelers</text>
+
+  <rect x="36" y="150" width="72" height="100" rx="4" fill="none" stroke="#1c2430" stroke-width="2.5"/>
+  <text x="72" y="138" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="#1c2430">120V</text>
+  <circle cx="108" cy="175" r="4.5" fill="#c62828"/>
+  <circle cx="108" cy="225" r="4.5" fill="#f5f5f5" stroke="#1c2430" stroke-width="1.5"/>
+
+  <rect x="170" y="145" width="110" height="110" rx="4" fill="none" stroke="#1c2430" stroke-width="2.5"/>
+  <text x="225" y="134" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="#1c2430">3-Way A</text>
+  <circle cx="190" cy="200" r="4" fill="#1c2430"/>
+  <circle cx="260" cy="175" r="4" fill="#1c2430"/>
+  <circle cx="260" cy="225" r="4" fill="#1c2430"/>
+  <line x1="190" y1="200" x2="245" y2="180" stroke="#1c2430" stroke-width="2.5"/>
+  <text x="200" y="218" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#5a6573">COM</text>
+  <text x="268" y="178" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#1565c0">T1</text>
+  <text x="268" y="228" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#2e7d32">T2</text>
+
+  <rect x="360" y="145" width="110" height="110" rx="4" fill="none" stroke="#1c2430" stroke-width="2.5"/>
+  <text x="415" y="134" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="#1c2430">3-Way B</text>
+  <circle cx="450" cy="200" r="4" fill="#1c2430"/>
+  <circle cx="380" cy="175" r="4" fill="#1c2430"/>
+  <circle cx="380" cy="225" r="4" fill="#1c2430"/>
+  <line x1="450" y1="200" x2="395" y2="180" stroke="#1c2430" stroke-width="2.5"/>
+  <text x="428" y="218" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#5a6573">COM</text>
+
+  <circle cx="560" cy="200" r="36" fill="none" stroke="#1c2430" stroke-width="2.5"/>
+  <line x1="535" y1="175" x2="585" y2="225" stroke="#1c2430" stroke-width="2"/>
+  <line x1="585" y1="175" x2="535" y2="225" stroke="#1c2430" stroke-width="2"/>
+  <text x="560" y="258" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="#1c2430">Lamp</text>
+
+  <path d="M108 175 H170" fill="none" stroke="#c62828" stroke-width="3" stroke-linecap="round"/>
+  <path d="M260 175 H380" fill="none" stroke="#1565c0" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M260 225 H380" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M450 200 H524" fill="none" stroke="#c62828" stroke-width="3" stroke-linecap="round"/>
+  <path d="M560 236 V310 H72 V225 H108" fill="none" stroke="#1c2430" stroke-width="3" stroke-linecap="round"/>
+
+  <text x="32" y="370" font-family="Georgia, serif" font-size="12" fill="#5a6573">Either switch toggles the lamp when travelers match.</text>
+</svg>
