@@ -5,7 +5,12 @@ dist/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars*
+.wrangler/
 coverage/
 *.log
 .turbo/
 server/.cursor-agent-store/
+server/public/andy.js
+server/public/labs/*.yaml

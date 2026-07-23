@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "andy",
+  "compatibility_date": "2026-07-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/index.ts",
+  "workers_dev": true,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "AI_PROVIDER": "gemini",
+    "GEMINI_MODEL": "gemini-3.6-flash",
+    "META_MODEL": "muse-spark-1.1",
+    "META_BASE_URL": "https://api.meta.ai/v1",
+    "CORS_ORIGINS": "*",
+    "MAX_UPLOAD_BYTES": "20971520"
+  }
+}

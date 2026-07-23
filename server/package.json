@@ -2,33 +2,38 @@
   "name": "@andy/server",
   "version": "1.0.0",
   "private": true,
-  "description": "Andy API — Hono server that turns diagram images into circuit-lab YAML via Gemini or Meta.",
+  "description": "Andy — Hono Worker: marketing site, lab/author UI, and diagram-to-YAML API.",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/index.ts",
-    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
-    "start": "node dist/index.js",
+    "predev": "npm run sync:assets",
+    "dev": "vite",
+    "prebuild": "npm run sync:assets",
+    "build": "vite build",
+    "deploy": "npm run build && wrangler deploy",
+    "preview": "npm run build && vite preview",
+    "sync:assets": "npm run build:lib -w @andy/frontend && mkdir -p public/labs && cp ../frontend/dist/andy.js public/andy.js && cp ../frontend/public/labs/*.yaml public/labs/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cf-typegen": "wrangler types"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
-    "@hono/node-server": "^1.14.3",
-    "dotenv": "^17.4.2",
     "hono": "^4.8.3",
     "js-yaml": "^4.3.0",
     "openai": "^6.48.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.21.2",
+    "@cloudflare/workers-types": "^4.20250723.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.30",
-    "tsc-alias": "^1.8.16",
-    "tsx": "^4.20.3",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.10"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.34.0"
   }
 }

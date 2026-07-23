@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { env } from "@/config/env.js";
+import { getAppConfig, type AppConfig, type Env } from "@/config/env.js";
 import { createDiagramProvider } from "@/ai/provider.js";
 import { validateLabYaml } from "@/lab/validate.js";
 import type { DiagramGenerationResult } from "@/ai/types.js";
+
+type AppEnv = { Bindings: Env };
 
 const ALLOWED_MIME = new Set([
   "image/png",
@@ -26,6 +28,19 @@ function normalizeMime(mime: string): string {
   return value;
 }
 
+/**
+ * Encodes binary bytes as a base64 string (Workers-safe, no Node Buffer).
+ * @param bytes - Image bytes.
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 type ParsedImageRequest = {
   imageBase64: string;
   mimeType: string;
@@ -42,9 +57,11 @@ type JsonError = {
 /**
  * Parses multipart or JSON diagram upload into a shared request shape.
  * @param c - Hono context for the POST body.
+ * @param config - App config (upload size limit).
  */
 async function parseImageRequest(
-  c: Context,
+  c: Context<AppEnv>,
+  config: AppConfig,
 ): Promise<ParsedImageRequest | JsonError> {
   const contentType = c.req.header("content-type") || "";
 
@@ -60,9 +77,9 @@ async function parseImageRequest(
       };
     }
 
-    if (file.size > env.maxUploadBytes) {
+    if (file.size > config.maxUploadBytes) {
       return {
-        error: `Image exceeds max size of ${env.maxUploadBytes} bytes.`,
+        error: `Image exceeds max size of ${config.maxUploadBytes} bytes.`,
         code: "image_too_large",
         status: 413,
       };
@@ -77,9 +94,9 @@ async function parseImageRequest(
       };
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const bytes = new Uint8Array(await file.arrayBuffer());
     return {
-      imageBase64: buffer.toString("base64"),
+      imageBase64: bytesToBase64(bytes),
       mimeType,
       title: typeof body.title === "string" ? body.title : undefined,
       notes: typeof body.notes === "string" ? body.notes : undefined,
@@ -113,9 +130,9 @@ async function parseImageRequest(
   }
 
   const approxBytes = Math.floor((imageBase64.length * 3) / 4);
-  if (approxBytes > env.maxUploadBytes) {
+  if (approxBytes > config.maxUploadBytes) {
     return {
-      error: `Image exceeds max size of ${env.maxUploadBytes} bytes.`,
+      error: `Image exceeds max size of ${config.maxUploadBytes} bytes.`,
       code: "image_too_large",
       status: 413,
     };
@@ -160,7 +177,7 @@ function wantsStream(c: Context): boolean {
   return stream === "1" || stream === "true";
 }
 
-export const diagramsRoutes = new Hono();
+export const diagramsRoutes = new Hono<AppEnv>();
 
 /**
  * POST /api/diagrams/from-image
@@ -177,7 +194,8 @@ export const diagramsRoutes = new Hono();
  * events (`progress`, `result`, `error`) instead of a single JSON body.
  */
 diagramsRoutes.post("/from-image", async (c) => {
-  const parsed = await parseImageRequest(c);
+  const config = getAppConfig(c.env);
+  const parsed = await parseImageRequest(c, config);
   if ("error" in parsed) {
     return c.json(
       { error: parsed.error, code: parsed.code },
@@ -186,7 +204,7 @@ diagramsRoutes.post("/from-image", async (c) => {
   }
 
   const { imageBase64, mimeType, title, notes } = parsed;
-  const provider = createDiagramProvider();
+  const provider = createDiagramProvider(config);
   const stream = wantsStream(c);
 
   if (!stream) {

@@ -6,16 +6,16 @@ A web-based circuit lab for USU Eastern students preparing for the Utah state el
 
 ```
 andy/
-├── frontend/          # Vite + Konva circuit lab (existing Andy UI / CDN library)
-├── server/            # Hono + TypeScript API (diagram image → lab YAML)
+├── frontend/          # Circuit lab client library (Konva) → andy.js
+├── server/            # Cloudflare Worker: site + lab/author UI + AI API
 ├── package.json       # npm workspaces root
 └── README.md
 ```
 
 | Package | Role |
 | --- | --- |
-| `@andy/frontend` | Interactive circuit editor, Demo/Lab/Check, YAML lab loader |
-| `@andy/server` | AI authoring API — upload a diagram image, get Andy lab YAML |
+| `@andy/frontend` | Interactive circuit editor library (Demo/Lab/Check), YAML loader, CDN IIFE |
+| `@andy/server` | Hono Worker — marketing site, `/lab`, `/author`, diagram → YAML API |
 
 ## The problem
 
@@ -32,9 +32,17 @@ Hands-on labs are a core part of the electrician prep course. Many students work
 
 ## How labs work
 
-Exercises live under [`frontend/public/labs/`](frontend/public/labs/). JavaScript owns component visuals and factories; each lab file owns layout, demo wires, continuity simulation, and Check grading. See the [lab authoring guide](frontend/public/labs/README.md).
+Exercises live under [`frontend/public/labs/`](frontend/public/labs/) (synced into the Worker as `/labs/*`). JavaScript owns component visuals and factories; each lab file owns layout, demo wires, continuity simulation, and Check grading. See the [lab authoring guide](frontend/public/labs/README.md).
 
-The app shell includes a lab picker (`?lab=doorbell`, `?lab=three-way-lamp`, …) and a **Create from image** page at `/author.html`.
+The site serves:
+
+| Path | Purpose |
+| --- | --- |
+| `/` | Project overview |
+| `/lab` | Lab picker (`?lab=doorbell`, `?lab=draft`, …) |
+| `/author` | Create a lab from a diagram image |
+
+Pages load the IIFE client library at `/andy.js` (`AndyCircuitLab.mountCircuitLab` / `scanAndMountLabs`).
 
 ### Modes
 
@@ -43,25 +51,24 @@ The app shell includes a lab picker (`?lab=doorbell`, `?lab=three-way-lamp`, …
 | **Demo** | Pre-wired reference circuit from the lab file. Press buttons / toggle switches to exercise simulation feedback. |
 | **Lab** | Same components start unwired. Draw terminal-to-terminal wires, test continuity, then **Check** for pass/fail grading. |
 
-## AI diagram → YAML (server)
+## AI diagram → YAML
 
-The Hono API accepts an image of a wiring diagram and returns Andy lab YAML.
+The Worker API accepts an image of a wiring diagram and returns Andy lab YAML.
 
 | Provider | Env | Notes |
 | --- | --- | --- |
-| **Gemini** (default) | `GEMINI_API_KEY`, `GEMINI_MODEL` | Multimodal diagram → YAML |
+| **Gemini** | `GEMINI_API_KEY`, `GEMINI_MODEL` | Multimodal diagram → YAML |
 | **Meta** | `META_API_KEY`, `META_MODEL` | OpenAI SDK → `https://api.meta.ai/v1` |
 | **Demo** | `AI_PROVIDER=demo` | Offline fixture YAML (no API key) |
 
 ```bash
 # from repo root
-cp server/.env.example server/.env   # add GEMINI_API_KEY or META_API_KEY
+cp server/.env.example server/.dev.vars   # local Worker bindings
 npm install
-npm run dev:server                   # http://localhost:3001
-npm run dev:frontend                 # http://localhost:5173 (proxies /api → :3001)
+npm run dev                               # http://localhost:5173
 ```
 
-Open [http://localhost:5173/author.html](http://localhost:5173/author.html), upload a diagram, then **Open in lab**.
+Open [/author](http://localhost:5173/author), upload a diagram, then **Open in lab**.
 
 ### API
 
@@ -97,26 +104,37 @@ Response:
 
 ## Tech stack
 
-- **Frontend** — HTML / CSS / JS, Vite, Vitest, Konva, js-yaml
-- **Server** — Node 20+, Hono, TypeScript, `@/` path aliases, Gemini
+- **Frontend library** — HTML / CSS / JS, Vite, Vitest, Konva, js-yaml
+- **Server** — Cloudflare Workers, Hono JSX, Vite (`@cloudflare/vite-plugin`), Wrangler
 - **Web Audio API** — sound profiles from lab config (no sound files)
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev:frontend    # circuit lab UI
-npm run dev:server      # AI YAML API (needs API key in server/.env)
+cp server/.env.example server/.dev.vars
+npm run dev                 # full site + API on :5173
 ```
+
+### Deploy (Cloudflare)
+
+```bash
+npx wrangler login          # once
+# optional: npx wrangler secret put GEMINI_API_KEY
+npm run deploy              # builds andy.js + Worker, deploys to *.workers.dev
+```
+
+Default production `AI_PROVIDER` is `demo` (see `server/wrangler.jsonc`). Set `AI_PROVIDER` / API key secrets for live Gemini or Meta.
 
 ### Scripts (root)
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev:frontend` | Vite app at `:5173` |
-| `npm run dev:server` | Hono API at `:3001` |
-| `npm run build` | Build frontend + server |
+| `npm run dev` | Worker + site (Vite Cloudflare) at `:5173` |
+| `npm run dev:frontend` | Frontend Vite only (library experiments) |
+| `npm run build` | Sync assets + build Worker |
 | `npm run build:lib` | Build CDN IIFE `andy.js` |
+| `npm run deploy` | Build and `wrangler deploy` |
 | `npm test` | Frontend + server tests |
 | `npm run typecheck` | TypeScript check for the server |
 
@@ -124,7 +142,7 @@ npm run dev:server      # AI YAML API (needs API key in server/.env)
 
 **Utah exam starter catalog** — Demo/Lab/Check/Test driven by YAML under `frontend/public/labs/`.
 
-**AI authoring MVP** — image → YAML via Gemini, with schema validation and a simple author UI.
+**AI authoring MVP** — image → YAML via Gemini (or demo fixture), with schema validation and author UI on the Worker.
 
 Next steps toward a fuller remote lab:
 

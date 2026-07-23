@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { env } from "@/config/env.js";
+import type { AppConfig } from "@/config/env.js";
 import { buildLabYamlPrompt } from "@/prompts/lab-yaml.js";
 import type {
   DiagramAiProvider,
@@ -15,11 +15,16 @@ import type {
 export class GeminiDiagramProvider implements DiagramAiProvider {
   readonly name = "gemini" as const;
 
+  /**
+   * @param config - App config with Gemini API key and model.
+   */
+  constructor(private readonly config: AppConfig) {}
+
   async generateLabYaml(
     request: DiagramGenerationRequest,
     options: DiagramGenerateOptions = {},
   ): Promise<DiagramGenerationResult> {
-    if (!env.geminiApiKey) {
+    if (!this.config.geminiApiKey) {
       throw Object.assign(new Error("GEMINI_API_KEY is not configured."), {
         status: 503,
         code: "missing_gemini_api_key",
@@ -29,7 +34,7 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
     const onProgress = options.onProgress;
     await onProgress?.({ message: "Sending diagram to Gemini…" });
 
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
+    const ai = new GoogleGenAI({ apiKey: this.config.geminiApiKey });
     const prompt = buildLabYamlPrompt({
       title: request.title,
       notes: request.notes,
@@ -37,7 +42,7 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
 
     await onProgress?.({ message: "Waiting for Gemini response…" });
     const response = await ai.models.generateContent({
-      model: env.geminiModel,
+      model: this.config.geminiModel,
       contents: [
         {
           role: "user",
@@ -66,7 +71,7 @@ export class GeminiDiagramProvider implements DiagramAiProvider {
     return {
       yaml: rawText,
       provider: "gemini",
-      model: env.geminiModel,
+      model: this.config.geminiModel,
       rawText,
     };
   }

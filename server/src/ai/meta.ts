@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { env } from "@/config/env.js";
+import type { AppConfig } from "@/config/env.js";
 import { buildLabYamlPrompt } from "@/prompts/lab-yaml.js";
 import type {
   DiagramAiProvider,
@@ -15,11 +15,16 @@ import type {
 export class MetaDiagramProvider implements DiagramAiProvider {
   readonly name = "meta" as const;
 
+  /**
+   * @param config - App config with Meta API key, model, and base URL.
+   */
+  constructor(private readonly config: AppConfig) {}
+
   async generateLabYaml(
     request: DiagramGenerationRequest,
     options: DiagramGenerateOptions = {},
   ): Promise<DiagramGenerationResult> {
-    if (!env.metaApiKey) {
+    if (!this.config.metaApiKey) {
       throw Object.assign(new Error("META_API_KEY is not configured."), {
         status: 503,
         code: "missing_meta_api_key",
@@ -30,8 +35,8 @@ export class MetaDiagramProvider implements DiagramAiProvider {
     await onProgress?.({ message: "Sending diagram to Meta…" });
 
     const client = new OpenAI({
-      baseURL: env.metaBaseUrl,
-      apiKey: env.metaApiKey,
+      baseURL: this.config.metaBaseUrl,
+      apiKey: this.config.metaApiKey,
     });
 
     const prompt = buildLabYamlPrompt({
@@ -44,7 +49,7 @@ export class MetaDiagramProvider implements DiagramAiProvider {
     let response;
     try {
       response = await client.responses.create({
-        model: env.metaModel,
+        model: this.config.metaModel,
         input: [
           {
             role: "user",
@@ -67,7 +72,7 @@ export class MetaDiagramProvider implements DiagramAiProvider {
       if (status === 404 || code === "model_not_found") {
         throw Object.assign(
           new Error(
-            `Meta model "${env.metaModel}" was not found for this API key. ` +
+            `Meta model "${this.config.metaModel}" was not found for this API key. ` +
               `Check https://dev.meta.ai/ that Muse Spark is enabled (models.list should include it).`,
           ),
           { status: 502, code: "meta_model_not_found" },
@@ -91,7 +96,7 @@ export class MetaDiagramProvider implements DiagramAiProvider {
     return {
       yaml: rawText,
       provider: "meta",
-      model: env.metaModel,
+      model: this.config.metaModel,
       rawText,
     };
   }

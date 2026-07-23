@@ -1,0 +1,74 @@
+html,
+body.lab-body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #f4f4f5;
+}
+
+body.lab-body {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+body.lab-body::before {
+  display: none;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.lab-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #d4d4d8;
+}
+
+.lab-picker-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lab-picker-select {
+  min-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 13px;
+}
+
+.lab-picker-author {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--accent, #0f766e);
+  text-decoration: none;
+}
+
+.lab-picker-author:hover {
+  text-decoration: underline;
+}
+
+.lab-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}

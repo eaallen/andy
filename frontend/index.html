@@ -11,7 +11,7 @@
       <nav class="lab-picker" aria-label="Choose lab">
         <label class="lab-picker-label" for="lab-select">Lab</label>
         <select id="lab-select" class="lab-picker-select"></select>
-        <a class="lab-picker-author" href="/author.html">Create from image</a>
+        <a class="lab-picker-author" href="/author">Create from image</a>
       </nav>
       <div id="lab-root" class="lab-root"></div>
     </div>
@@ -97,7 +97,7 @@
         yaml = sessionStorage.getItem(DRAFT_STORAGE_KEY) || "";
         if (!yaml.trim()) {
           throw new Error(
-            "No AI draft YAML in session. Generate one at /author.html first.",
+            "No AI draft YAML in session. Generate one at /author first.",
           );
         }
       } else {
