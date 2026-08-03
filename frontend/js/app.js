@@ -732,13 +732,25 @@ export function bootCircuitLab(host, config) {
       evt.evt.preventDefault();
     }
 
+    // Show a large halo immediately so a finger does not fully hide the node.
+    wireManager.setPressHighlight(terminal, evt);
+
     if (mode !== "lab") {
+      /**
+       * Clears the demo/read-only press halo on release.
+       */
+      function onDemoUp() {
+        stage.off(".terminalPress");
+        wireManager.clearPressHighlight();
+      }
+      stage.on("mouseup.terminalPress touchend.terminalPress", onDemoUp);
       return;
     }
 
     const group = terminal.componentGroup;
     const startPointer = stage.getPointerPosition();
     if (!startPointer) {
+      wireManager.clearPressHighlight();
       return;
     }
 
@@ -800,6 +812,8 @@ export function bootCircuitLab(host, config) {
       }
       wireManager.clearWireSelection();
       wireManager.handleTerminalClick(terminal, wireColor, true);
+      // Drop press tracking; pending stays highlighted via sticky check.
+      wireManager.clearPressHighlight();
     }
 
     stage.on("mousemove.terminalWire touchmove.terminalWire", onMove);

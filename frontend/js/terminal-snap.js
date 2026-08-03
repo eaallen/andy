@@ -13,12 +13,17 @@ export const WIRE_DRAG_THRESHOLD_TOUCH = 12;
  * @param {Konva.KonvaEventObject|Event|null|undefined} evt - Gesture event.
  */
 export function wireDragThresholdForEvent(evt) {
+  return isTouchPointerEvent(evt) ? WIRE_DRAG_THRESHOLD_TOUCH : WIRE_DRAG_THRESHOLD;
+}
+
+/**
+ * Returns whether a Konva or native event came from a touch pointer.
+ * @param {Konva.KonvaEventObject|Event|null|undefined} evt - Gesture event.
+ */
+export function isTouchPointerEvent(evt) {
   const native = evt && evt.evt ? evt.evt : evt;
   const type = native && typeof native.type === "string" ? native.type : "";
-  if (type.indexOf("touch") === 0) {
-    return WIRE_DRAG_THRESHOLD_TOUCH;
-  }
-  return WIRE_DRAG_THRESHOLD;
+  return type.indexOf("touch") === 0;
 }
 
 /**

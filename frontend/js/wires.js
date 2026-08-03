@@ -1,9 +1,10 @@
 import Konva from "konva";
 import { STAGE_DEFAULT_CURSOR } from "./canvas-nav.js";
 import { WIRE_COLORS } from "./components/constants.js";
-import { getTerminalComponentGroup, getTerminalPosition } from "./components/shared.js";
+import { getTerminalComponentGroup, getTerminalPosition, setTerminalHighlightVisual } from "./components/shared.js";
 import {
   TERMINAL_SNAP_SCREEN_RADIUS,
+  isTouchPointerEvent,
   nearestTerminalInScreenRadius,
   wireDragThresholdForEvent,
 } from "./terminal-snap.js";
@@ -79,8 +80,10 @@ export function createWireManager(layer, options) {
   const MAX_HISTORY = 50;
   let selectedWire = null;
   let pendingTerminal = null;
-  /** @type {object|null} */
   let snapTerminal = null;
+  let pressTerminal = null;
+  /** @type {{ touch?: boolean }} */
+  let highlightOptions = {};
   let restoring = false;
   /** @type {Konva.Line|null} */
   let draftLine = null;
@@ -264,15 +267,14 @@ export function createWireManager(layer, options) {
    * @param {boolean} on - Whether the highlight is active.
    */
   function applyTerminalHighlight(terminal, on) {
+    const view = typeof getView === "function" ? getView() : null;
+    const viewScale = view && typeof view.scale === "number" ? view.scale : 1;
+    setTerminalHighlightVisual(terminal, on, {
+      touch: !!highlightOptions.touch,
+      viewScale: viewScale,
+    });
     if (!terminal || !terminal.node) {
       return;
-    }
-    if (on) {
-      terminal.node.stroke("#2563eb");
-      terminal.node.strokeWidth(3);
-    } else {
-      terminal.node.stroke("#000000");
-      terminal.node.strokeWidth(2);
     }
     const termLayer = terminal.node.getLayer();
     if (termLayer) {
@@ -281,10 +283,48 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Returns whether a terminal is currently kept highlighted by pending or snap.
+   * @param {object|null} terminal - Terminal to check.
+   */
+  function isStickyHighlight(terminal) {
+    return !!terminal && (terminal === pendingTerminal || terminal === snapTerminal);
+  }
+
+  /**
+   * Clears the in-gesture press highlight without touching pending/snap.
+   */
+  function clearPressHighlight() {
+    if (pressTerminal && !isStickyHighlight(pressTerminal)) {
+      applyTerminalHighlight(pressTerminal, false);
+    }
+    pressTerminal = null;
+  }
+
+  /**
+   * Shows a large press halo immediately on pointer-down (before tap completes).
+   * @param {{ node: Konva.Circle }|null} terminal - Terminal under the finger.
+   * @param {Konva.KonvaEventObject|Event|null|undefined} [evt] - Gesture event (touch → larger halo).
+   */
+  function setPressHighlight(terminal, evt) {
+    highlightOptions = { touch: isTouchPointerEvent(evt) };
+    if (pressTerminal === terminal) {
+      if (terminal) {
+        applyTerminalHighlight(terminal, true);
+      }
+      return;
+    }
+    clearPressHighlight();
+    pressTerminal = terminal || null;
+    if (pressTerminal) {
+      applyTerminalHighlight(pressTerminal, true);
+    }
+  }
+
+  /**
    * Clears the rubber-band snap-target highlight.
    */
   function clearSnapHighlight() {
-    if (snapTerminal && snapTerminal !== pendingTerminal) {
+    if (snapTerminal && snapTerminal !== pendingTerminal && snapTerminal !== pressTerminal) {
       applyTerminalHighlight(snapTerminal, false);
     }
     snapTerminal = null;
@@ -311,6 +351,7 @@ export function createWireManager(layer, options) {
    */
   function clearPendingHighlight() {
     clearSnapHighlight();
+    clearPressHighlight();
     if (pendingTerminal) {
       applyTerminalHighlight(pendingTerminal, false);
     }
@@ -323,6 +364,10 @@ export function createWireManager(layer, options) {
    * @param {{ node: Konva.Circle }} terminal - Terminal to highlight.
    */
   function setPendingTerminal(terminal) {
+    // Promote an in-gesture press on the same node without a clear/redraw flicker.
+    if (pressTerminal === terminal) {
+      pressTerminal = null;
+    }
     clearPendingHighlight();
     pendingTerminal = terminal;
     applyTerminalHighlight(terminal, true);
@@ -1130,10 +1175,12 @@ export function createWireManager(layer, options) {
     clearWires: clearWires,
     clearPendingHighlight: clearPendingHighlight,
     clearSnapHighlight: clearSnapHighlight,
+    clearPressHighlight: clearPressHighlight,
     clearWireSelection: clearWireSelection,
     clearDraft: clearDraft,
     setDraftDrag: setDraftDrag,
     setPendingTerminal: setPendingTerminal,
+    setPressHighlight: setPressHighlight,
     setSnapHighlight: setSnapHighlight,
     updateWirePositions: updateWirePositions,
     handleTerminalClick: handleTerminalClick,

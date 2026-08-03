@@ -74,8 +74,20 @@ export function initComponent(group, componentType, instanceId, terminals) {
 /** Distance from a shell edge to a terminal center (terminals sit just outside). */
 export const TERMINAL_OUTSET = 16;
 
+/** Target halo radius in screen pixels so a press stays visible under a finger. */
+export const TERMINAL_HIGHLIGHT_HALO_RADIUS = 36;
+/** Even larger touch halo target (screen px). */
+export const TERMINAL_HIGHLIGHT_HALO_RADIUS_TOUCH = 48;
+
 /** Pointer travel (px) before a terminal press counts as an edge-slide instead of a click. */
 const TERMINAL_SLIDE_THRESHOLD = 8;
+
+/** Default terminal label styling (restored when highlight clears). */
+const TERMINAL_LABEL_FILL = "#3f3f46";
+const TERMINAL_LABEL_SIZE = 11;
+/** Emphasized label while a terminal is pressed or selected. */
+const TERMINAL_LABEL_FILL_ACTIVE = "#1d4ed8";
+const TERMINAL_LABEL_SIZE_ACTIVE = 13;
 
 /**
  * Clamps a number into an inclusive range.
@@ -144,6 +156,66 @@ function positionTerminalLabel(text, radius, placement) {
 }
 
 /**
+ * World-space halo radius that keeps a roughly constant screen size.
+ * @param {{ touch?: boolean, viewScale?: number, haloRadius?: number }} [options] - Highlight options.
+ */
+export function terminalHighlightHaloRadius(options) {
+  const opts = options || {};
+  if (typeof opts.haloRadius === "number" && opts.haloRadius > 0) {
+    return opts.haloRadius;
+  }
+  const screenPx = opts.touch
+    ? TERMINAL_HIGHLIGHT_HALO_RADIUS_TOUCH
+    : TERMINAL_HIGHLIGHT_HALO_RADIUS;
+  const scale = typeof opts.viewScale === "number" && opts.viewScale > 0 ? opts.viewScale : 1;
+  return screenPx / scale;
+}
+
+/**
+ * Shows or hides the large press/select halo on a terminal (finger-friendly).
+ * @param {{ node?: Konva.Circle, halo?: Konva.Circle, labelNode?: Konva.Text, radius?: number, labelPlacement?: string }|null} terminal - Terminal metadata from addTerminal.
+ * @param {boolean} on - Whether the highlight is active.
+ * @param {{ touch?: boolean, viewScale?: number, haloRadius?: number }} [options] - Optional flags; touch uses a larger halo.
+ */
+export function setTerminalHighlightVisual(terminal, on, options) {
+  if (!terminal || !terminal.node) {
+    return;
+  }
+  const radius = terminal.radius || 7;
+  const placement = terminal.labelPlacement || "right";
+
+  if (on) {
+    terminal.node.stroke("#2563eb");
+    terminal.node.strokeWidth(4);
+    terminal.node.fill("#dbeafe");
+    if (terminal.halo) {
+      terminal.halo.radius(terminalHighlightHaloRadius(options));
+      terminal.halo.fill("rgba(37, 99, 235, 0.28)");
+      terminal.halo.stroke("rgba(37, 99, 235, 0.9)");
+      terminal.halo.strokeWidth(3);
+      terminal.halo.visible(true);
+    }
+    if (terminal.labelNode) {
+      terminal.labelNode.fill(TERMINAL_LABEL_FILL_ACTIVE);
+      terminal.labelNode.fontSize(TERMINAL_LABEL_SIZE_ACTIVE);
+      positionTerminalLabel(terminal.labelNode, radius, placement);
+    }
+  } else {
+    terminal.node.stroke("#000000");
+    terminal.node.strokeWidth(2);
+    terminal.node.fill("#ffffff");
+    if (terminal.halo) {
+      terminal.halo.visible(false);
+    }
+    if (terminal.labelNode) {
+      terminal.labelNode.fill(TERMINAL_LABEL_FILL);
+      terminal.labelNode.fontSize(TERMINAL_LABEL_SIZE);
+      positionTerminalLabel(terminal.labelNode, radius, placement);
+    }
+  }
+}
+
+/**
  * Draws a labeled terminal just outside a component shell.
  * Drag slides it along its edge only (fixed distance from the box).
  * @param {Konva.Group} group - Parent component group.
@@ -177,6 +249,18 @@ export function addTerminal(group, x, y, id, label, opts) {
     name: "terminal-handle",
   });
 
+  const halo = new Konva.Circle({
+    x: 0,
+    y: 0,
+    radius: TERMINAL_HIGHLIGHT_HALO_RADIUS,
+    fill: "rgba(37, 99, 235, 0.2)",
+    stroke: "rgba(37, 99, 235, 0.65)",
+    strokeWidth: 2.5,
+    listening: false,
+    visible: false,
+    name: "terminal-highlight-halo",
+  });
+
   const circle = new Konva.Circle({
     x: 0,
     y: 0,
@@ -190,14 +274,15 @@ export function addTerminal(group, x, y, id, label, opts) {
 
   const text = new Konva.Text({
     text: label,
-    fontSize: 11,
+    fontSize: TERMINAL_LABEL_SIZE,
     fontFamily: "system-ui, Arial, sans-serif",
     fontStyle: "bold",
-    fill: "#3f3f46",
+    fill: TERMINAL_LABEL_FILL,
     listening: false,
   });
   positionTerminalLabel(text, radius, placement);
 
+  handle.add(halo);
   handle.add(circle);
   handle.add(text);
   group.add(handle);
@@ -208,7 +293,11 @@ export function addTerminal(group, x, y, id, label, opts) {
     role: options.role || TERMINAL_ROLES.JUNCTION,
     wireColor: options.wireColor || "gray",
     side: side,
+    radius: radius,
+    labelPlacement: placement,
     node: circle,
+    halo: halo,
+    labelNode: text,
     handle: handle,
     componentGroup: group,
     didSlide: false,
