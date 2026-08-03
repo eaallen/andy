@@ -127,9 +127,6 @@ export function bootCircuitLab(host, config) {
    */
   function endStagePan() {
     stage.off(".stagePan");
-    if (stageWrap) {
-      stageWrap.classList.remove("lab-stage-wrap--panning");
-    }
     stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
   }
 
@@ -673,23 +670,7 @@ export function bootCircuitLab(host, config) {
       wireManager.updateWirePositions();
     });
 
-    group.on("mouseenter", function (evt) {
-      if (isTerminalTarget(evt.target)) {
-        return;
-      }
-      if (group.isSwitch && (isButtonPadTarget(evt.target) || isSwitchHitTarget(evt.target))) {
-        return;
-      }
-      stage.container().style.cursor = "grab";
-    });
-    group.on("mouseleave", function () {
-      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
-    });
-    group.on("dragstart", function () {
-      stage.container().style.cursor = "grabbing";
-    });
     group.on("dragend", function () {
-      stage.container().style.cursor = "grab";
       syncContentBounds();
       setView(view);
     });
@@ -707,18 +688,6 @@ export function bootCircuitLab(host, config) {
         bindButton(group);
       }
     }
-  }
-
-  /**
-   * Returns whether a Konva event target is a terminal (or its handle).
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isTerminalTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    const name = target.name();
-    return name === "terminal" || name === "terminal-handle";
   }
 
   /**
@@ -890,28 +859,6 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Returns whether a Konva event target is the doorbell press pad.
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isButtonPadTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    return target.name() === "button-pad";
-  }
-
-  /**
-   * Returns whether a Konva event target is the SPST switch hit area.
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isSwitchHitTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    return target.name() === "switch-hit";
-  }
-
-  /**
    * Binds press/release interaction on a doorbell button.
    * @param {Konva.Group} button - Button component.
    */
@@ -928,7 +875,6 @@ export function bootCircuitLab(host, config) {
     });
 
     pad.on("mouseenter", function () {
-      stage.container().style.cursor = "pointer";
       if (!button.isPressed) {
         applyDoorbellButtonVisual(button, { hovered: true });
         componentLayer.batchDraw();
@@ -936,7 +882,6 @@ export function bootCircuitLab(host, config) {
     });
 
     pad.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
       applyDoorbellButtonVisual(button, { hovered: false });
       componentLayer.batchDraw();
       if (!button.isPressed) {
@@ -976,14 +921,6 @@ export function bootCircuitLab(host, config) {
     hit.on("click tap", function (evt) {
       evt.cancelBubble = true;
       handleToggleSwitch(sw);
-    });
-
-    hit.on("mouseenter", function () {
-      stage.container().style.cursor = "pointer";
-    });
-
-    hit.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
     });
   }
 
@@ -1216,10 +1153,6 @@ export function bootCircuitLab(host, config) {
         }
         panning = true;
         suppressStageClick = true;
-        if (stageWrap) {
-          stageWrap.classList.add("lab-stage-wrap--panning");
-        }
-        stage.container().style.cursor = "grabbing";
       }
 
       setView({

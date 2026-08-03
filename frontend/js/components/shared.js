@@ -373,7 +373,6 @@ export function addTerminal(group, x, y, id, label, opts) {
           return;
         }
         sliding = true;
-        stage.container().style.cursor = "grabbing";
       }
       slideToPointer(stage);
       stage.batchDraw();
@@ -385,7 +384,6 @@ export function addTerminal(group, x, y, id, label, opts) {
     function onUp() {
       stage.off(".terminalSlide");
       group.draggable(true);
-      stage.container().style.cursor = "grab";
       handle.fire("terminalslideend");
     }
 
