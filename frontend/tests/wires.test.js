@@ -16,8 +16,12 @@ describe("createWireManager", () => {
 
   /**
    * Builds a stage with two fake terminals for wire tests.
+   * @param {{
+   *   listTerminals?: () => Array<object>,
+   *   getView?: () => { scale: number; x: number; y: number },
+   * }} [managerOptions] - Optional wire-manager options.
    */
-  function makeHarness() {
+  function makeHarness(managerOptions) {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const stage = new Konva.Stage({
@@ -54,7 +58,7 @@ describe("createWireManager", () => {
 
     const a = makeTerminal("power", "hot", 40, 40);
     const b = makeTerminal("lamp", "load", 200, 40);
-    const manager = createWireManager(layer, {});
+    const manager = createWireManager(layer, managerOptions || {});
     stage.draw();
     return { stage: stage, layer: layer, a: a, b: b, manager: manager };
   }
@@ -87,5 +91,38 @@ describe("createWireManager", () => {
     expect(wire.colorKey).toBe("green");
     expect(wire.line.stroke()).toBe("#16a34a");
     expect(wire.line.strokeWidth()).toBe(5);
+  });
+
+  it("magnetically connects on drag-drop near a terminal and skips self", () => {
+    /** @type {Array<object>} */
+    const terminals = [];
+    const harness = makeHarness({
+      listTerminals: function () {
+        return terminals;
+      },
+      getView: function () {
+        return { scale: 1, x: 0, y: 0 };
+      },
+    });
+    terminals.push(harness.a, harness.b);
+
+    // Stub pointer — jsdom/Konva setPointersPositions yields NaN without layout.
+    harness.stage.getPointerPosition = function () {
+      return { x: 220, y: 40 };
+    };
+    // Near B (world 200,40) but outside the tiny circle hit — snap should still connect.
+    expect(harness.manager.terminalAtPointer(harness.stage, harness.a)).toBe(harness.b);
+    harness.manager.completeDragConnect(harness.a, harness.stage, "red");
+    expect(harness.manager.getWires()).toHaveLength(1);
+    expect(harness.manager.hasWireBetween(harness.a, harness.b)).toBe(true);
+
+    harness.manager.clearWires();
+    harness.stage.getPointerPosition = function () {
+      return { x: 50, y: 40 };
+    };
+    // Near A while dragging from A — exclude source, no self-wire.
+    expect(harness.manager.terminalAtPointer(harness.stage, harness.a)).toBeNull();
+    harness.manager.completeDragConnect(harness.a, harness.stage, "red");
+    expect(harness.manager.getWires()).toHaveLength(0);
   });
 });

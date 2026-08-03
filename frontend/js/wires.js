@@ -3,10 +3,21 @@ import { STAGE_DEFAULT_CURSOR } from "./canvas-nav.js";
 import { WIRE_COLORS } from "./components/constants.js";
 import { getTerminalComponentGroup, getTerminalPosition } from "./components/shared.js";
 import {
+  TERMINAL_SNAP_SCREEN_RADIUS,
+  nearestTerminalInScreenRadius,
+  wireDragThresholdForEvent,
+} from "./terminal-snap.js";
+import {
   WIRE_TENSION,
   findClosestSegmentIndex,
   wireSegmentMidpoints,
 } from "./wire-path.js";
+
+export {
+  WIRE_DRAG_THRESHOLD,
+  WIRE_DRAG_THRESHOLD_TOUCH,
+  wireDragThresholdForEvent,
+} from "./terminal-snap.js";
 
 /** Colored stroke width for an unselected wire. */
 const WIRE_STROKE_WIDTH = 3;
@@ -18,8 +29,8 @@ const WIRE_UNDERSTROKE_PAD = 5;
 const WIRE_UNDERSTROKE_COLOR = "#e8e8e8";
 /** Radius of bend handles on a selected wire. */
 const BEND_HANDLE_RADIUS = 6;
-/** Pointer travel (stage px) before a mid-handle press inserts a bend. */
-export const WIRE_DRAG_THRESHOLD = 6;
+/** Invisible hit expansion for bend / midpoint handles (finger-friendly). */
+const BEND_HANDLE_HIT_STROKE = 22;
 
 /**
  * Shows a crosshair over bend / midpoint handles.
@@ -49,6 +60,8 @@ function bindBendHandleCursor(handle) {
  *   onSelectionChange?: (wire: object|null, worldPos: {x:number,y:number}|null) => void,
  *   resolveTerminal?: (key: string) => object|null,
  *   findTerminalFromNode?: (node: Konva.Node) => object|null,
+ *   listTerminals?: () => Array<object>,
+ *   getView?: () => { scale: number; x: number; y: number },
  * }} [options] - Manager options.
  */
 export function createWireManager(layer, options) {
@@ -58,12 +71,16 @@ export function createWireManager(layer, options) {
   const onSelectionChange = opts.onSelectionChange;
   const resolveTerminal = opts.resolveTerminal;
   const findTerminalFromNode = opts.findTerminalFromNode;
+  const listTerminals = opts.listTerminals;
+  const getView = opts.getView;
 
   const wires = [];
   const history = [];
   const MAX_HISTORY = 50;
   let selectedWire = null;
   let pendingTerminal = null;
+  /** @type {object|null} */
+  let snapTerminal = null;
   let restoring = false;
   /** @type {Konva.Line|null} */
   let draftLine = null;
@@ -242,12 +259,60 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Applies or clears the blue connect highlight on a terminal circle.
+   * @param {{ node?: Konva.Circle }|null} terminal - Terminal metadata.
+   * @param {boolean} on - Whether the highlight is active.
+   */
+  function applyTerminalHighlight(terminal, on) {
+    if (!terminal || !terminal.node) {
+      return;
+    }
+    if (on) {
+      terminal.node.stroke("#2563eb");
+      terminal.node.strokeWidth(3);
+    } else {
+      terminal.node.stroke("#000000");
+      terminal.node.strokeWidth(2);
+    }
+    const termLayer = terminal.node.getLayer();
+    if (termLayer) {
+      termLayer.batchDraw();
+    }
+  }
+
+  /**
+   * Clears the rubber-band snap-target highlight.
+   */
+  function clearSnapHighlight() {
+    if (snapTerminal && snapTerminal !== pendingTerminal) {
+      applyTerminalHighlight(snapTerminal, false);
+    }
+    snapTerminal = null;
+  }
+
+  /**
+   * Highlights the terminal under the pointer during a rubber-band drag.
+   * @param {object|null} terminal - Snap target, or null to clear.
+   */
+  function setSnapHighlight(terminal) {
+    if (snapTerminal === terminal) {
+      return;
+    }
+    clearSnapHighlight();
+    if (!terminal || terminal === pendingTerminal) {
+      return;
+    }
+    snapTerminal = terminal;
+    applyTerminalHighlight(terminal, true);
+  }
+
+  /**
    * Clears pending terminal selection highlight.
    */
   function clearPendingHighlight() {
-    if (pendingTerminal && pendingTerminal.node) {
-      pendingTerminal.node.stroke("#000000");
-      pendingTerminal.node.strokeWidth(2);
+    clearSnapHighlight();
+    if (pendingTerminal) {
+      applyTerminalHighlight(pendingTerminal, false);
     }
     pendingTerminal = null;
     clearDraft();
@@ -260,8 +325,7 @@ export function createWireManager(layer, options) {
   function setPendingTerminal(terminal) {
     clearPendingHighlight();
     pendingTerminal = terminal;
-    terminal.node.stroke("#2563eb");
-    terminal.node.strokeWidth(3);
+    applyTerminalHighlight(terminal, true);
   }
 
   /**
@@ -406,6 +470,7 @@ export function createWireManager(layer, options) {
           fill: "#dbeafe",
           stroke: "#93c5fd",
           strokeWidth: 1.5,
+          hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
           opacity: 0.9,
           name: "bend-midpoint",
         });
@@ -442,6 +507,7 @@ export function createWireManager(layer, options) {
       return;
     }
     const start = { x: startPointer.x, y: startPointer.y };
+    const dragThreshold = wireDragThresholdForEvent(e);
     let inserted = false;
     const bendIndex = segmentIndex;
 
@@ -459,7 +525,7 @@ export function createWireManager(layer, options) {
       if (!inserted) {
         const dx = stagePos.x - start.x;
         const dy = stagePos.y - start.y;
-        if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+        if (dx * dx + dy * dy < dragThreshold * dragThreshold) {
           return;
         }
         inserted = true;
@@ -480,6 +546,7 @@ export function createWireManager(layer, options) {
               fill: "#ffffff",
               stroke: "#2563eb",
               strokeWidth: 2,
+              hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
               name: "bend-handle",
             });
             bindBendHandleCursor(handle);
@@ -540,6 +607,7 @@ export function createWireManager(layer, options) {
           fill: "#ffffff",
           stroke: "#2563eb",
           strokeWidth: 2,
+          hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
           draggable: true,
           name: "bend-handle",
         });
@@ -948,22 +1016,57 @@ export function createWireManager(layer, options) {
   }
 
   /**
-   * Resolves a terminal under a stage pointer (for drag-connect drop).
+   * Resolves a terminal near a stage pointer (magnetic snap, then intersection).
    * @param {Konva.Stage} stage - Active stage.
+   * @param {object} [excludeTerminal] - Terminal to skip (e.g. drag source).
    */
-  function terminalAtPointer(stage) {
-    if (!stage || typeof findTerminalFromNode !== "function") {
+  function terminalAtPointer(stage, excludeTerminal) {
+    if (!stage) {
       return null;
     }
     const pointer = stage.getPointerPosition();
     if (!pointer) {
       return null;
     }
+
+    const excludeKey = excludeTerminal ? terminalKey(excludeTerminal) : null;
+    /**
+     * @param {object} terminal - Candidate terminal.
+     */
+    function shouldExclude(terminal) {
+      return !!(excludeKey && terminalKey(terminal) === excludeKey);
+    }
+
+    if (typeof listTerminals === "function" && typeof getView === "function") {
+      const view = getView();
+      const terminals = listTerminals() || [];
+      const snapped = nearestTerminalInScreenRadius(
+        pointer,
+        terminals,
+        function (terminal) {
+          return getTerminalPosition(terminal);
+        },
+        view,
+        TERMINAL_SNAP_SCREEN_RADIUS,
+        shouldExclude
+      );
+      if (snapped) {
+        return snapped;
+      }
+    }
+
+    if (typeof findTerminalFromNode !== "function") {
+      return null;
+    }
     const shape = stage.getIntersection(pointer);
     if (!shape) {
       return null;
     }
-    return findTerminalFromNode(shape);
+    const hit = findTerminalFromNode(shape);
+    if (hit && shouldExclude(hit)) {
+      return null;
+    }
+    return hit;
   }
 
   /**
@@ -995,14 +1098,15 @@ export function createWireManager(layer, options) {
   }
 
   /**
-   * Completes a drag-connect if the pointer is over another terminal.
+   * Completes a drag-connect if the pointer is near another terminal.
    * @param {object} fromTerminal - Start terminal.
    * @param {Konva.Stage} stage - Active stage.
    * @param {string} colorKey - Active wire color key.
    */
   function completeDragConnect(fromTerminal, stage, colorKey) {
     clearDraft();
-    const target = terminalAtPointer(stage);
+    const target = terminalAtPointer(stage, fromTerminal);
+    clearSnapHighlight();
     if (target && terminalKey(target) !== terminalKey(fromTerminal)) {
       connectTerminals(fromTerminal, target, colorKey);
     }
@@ -1025,10 +1129,12 @@ export function createWireManager(layer, options) {
     setWireColorKey: setWireColorKey,
     clearWires: clearWires,
     clearPendingHighlight: clearPendingHighlight,
+    clearSnapHighlight: clearSnapHighlight,
     clearWireSelection: clearWireSelection,
     clearDraft: clearDraft,
     setDraftDrag: setDraftDrag,
     setPendingTerminal: setPendingTerminal,
+    setSnapHighlight: setSnapHighlight,
     updateWirePositions: updateWirePositions,
     handleTerminalClick: handleTerminalClick,
     completeDragConnect: completeDragConnect,

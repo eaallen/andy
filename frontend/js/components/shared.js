@@ -184,7 +184,7 @@ export function addTerminal(group, x, y, id, label, opts) {
     fill: "#ffffff",
     stroke: "#000000",
     strokeWidth: 2,
-    hitStrokeWidth: 20,
+    hitStrokeWidth: 36,
     name: "terminal",
   });
 

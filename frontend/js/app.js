@@ -5,7 +5,7 @@ import { applyLampVisual } from "./components/lamp.js";
 import { createLayoutFromConfig } from "./components/registry.js";
 import { findTerminal } from "./components/shared.js";
 import { applySwitchVisual } from "./components/switch-shared.js";
-import { createWireManager, WIRE_DRAG_THRESHOLD } from "./wires.js";
+import { createWireManager, wireDragThresholdForEvent } from "./wires.js";
 import { createWireMenu } from "./wire-menu.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
@@ -302,6 +302,24 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
+   * Returns every terminal currently on the stage.
+   */
+  function listTerminals() {
+    const result = [];
+    const list = componentList();
+    for (let i = 0; i < list.length; i += 1) {
+      const group = list[i];
+      if (!group || !group.terminals) {
+        continue;
+      }
+      for (let t = 0; t < group.terminals.length; t += 1) {
+        result.push(group.terminals[t]);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Resolves a terminal key (componentId:terminalId) to a terminal object.
    * @param {string} key - Terminal key from the wire manager.
    */
@@ -445,6 +463,10 @@ export function bootCircuitLab(host, config) {
   const wireManager = createWireManager(wireLayer, {
     resolveTerminal: resolveTerminal,
     findTerminalFromNode: findTerminalFromNode,
+    listTerminals: listTerminals,
+    getView: function () {
+      return view;
+    },
     onHistoryChange: syncUndoButton,
     onChange: handleWiresChanged,
     onSelectionChange: handleWireSelectionChange,
@@ -721,6 +743,7 @@ export function bootCircuitLab(host, config) {
     }
 
     let dragging = false;
+    const dragThreshold = wireDragThresholdForEvent(evt);
     group.draggable(false);
     if (typeof group.stopDrag === "function") {
       group.stopDrag();
@@ -740,7 +763,7 @@ export function bootCircuitLab(host, config) {
       const dy = pos.y - startPointer.y;
 
       if (!dragging) {
-        if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+        if (dx * dx + dy * dy < dragThreshold * dragThreshold) {
           return;
         }
         dragging = true;
@@ -754,6 +777,7 @@ export function bootCircuitLab(host, config) {
 
       const world = pointerToWorld(pos, view);
       wireManager.setDraftDrag(terminal, world);
+      wireManager.setSnapHighlight(wireManager.terminalAtPointer(stage, terminal));
     }
 
     /**
@@ -769,6 +793,7 @@ export function bootCircuitLab(host, config) {
         return;
       }
 
+      wireManager.clearSnapHighlight();
       // Tap: pending / complete two-click connect.
       if (wireMenu) {
         wireMenu.close();
