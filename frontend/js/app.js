@@ -5,7 +5,7 @@ import { applyLampVisual } from "./components/lamp.js";
 import { createLayoutFromConfig } from "./components/registry.js";
 import { findTerminal } from "./components/shared.js";
 import { applySwitchVisual } from "./components/switch-shared.js";
-import { createWireManager, WIRE_DRAG_THRESHOLD } from "./wires.js";
+import { createWireManager, wireDragThresholdForEvent } from "./wires.js";
 import { createWireMenu } from "./wire-menu.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
@@ -127,9 +127,6 @@ export function bootCircuitLab(host, config) {
    */
   function endStagePan() {
     stage.off(".stagePan");
-    if (stageWrap) {
-      stageWrap.classList.remove("lab-stage-wrap--panning");
-    }
     stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
   }
 
@@ -302,6 +299,24 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
+   * Returns every terminal currently on the stage.
+   */
+  function listTerminals() {
+    const result = [];
+    const list = componentList();
+    for (let i = 0; i < list.length; i += 1) {
+      const group = list[i];
+      if (!group || !group.terminals) {
+        continue;
+      }
+      for (let t = 0; t < group.terminals.length; t += 1) {
+        result.push(group.terminals[t]);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Resolves a terminal key (componentId:terminalId) to a terminal object.
    * @param {string} key - Terminal key from the wire manager.
    */
@@ -445,6 +460,10 @@ export function bootCircuitLab(host, config) {
   const wireManager = createWireManager(wireLayer, {
     resolveTerminal: resolveTerminal,
     findTerminalFromNode: findTerminalFromNode,
+    listTerminals: listTerminals,
+    getView: function () {
+      return view;
+    },
     onHistoryChange: syncUndoButton,
     onChange: handleWiresChanged,
     onSelectionChange: handleWireSelectionChange,
@@ -651,23 +670,7 @@ export function bootCircuitLab(host, config) {
       wireManager.updateWirePositions();
     });
 
-    group.on("mouseenter", function (evt) {
-      if (isTerminalTarget(evt.target)) {
-        return;
-      }
-      if (group.isSwitch && (isButtonPadTarget(evt.target) || isSwitchHitTarget(evt.target))) {
-        return;
-      }
-      stage.container().style.cursor = "grab";
-    });
-    group.on("mouseleave", function () {
-      stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
-    });
-    group.on("dragstart", function () {
-      stage.container().style.cursor = "grabbing";
-    });
     group.on("dragend", function () {
-      stage.container().style.cursor = "grab";
       syncContentBounds();
       setView(view);
     });
@@ -688,18 +691,6 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Returns whether a Konva event target is a terminal (or its handle).
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isTerminalTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    const name = target.name();
-    return name === "terminal" || name === "terminal-handle";
-  }
-
-  /**
    * Lab click-or-drag wire gesture: tap to pending/connect, drag for rubber-band.
    * @param {object} terminal - Terminal metadata.
    * @param {Konva.KonvaEventObject} evt - Pointer down event.
@@ -710,17 +701,30 @@ export function bootCircuitLab(host, config) {
       evt.evt.preventDefault();
     }
 
+    // Show a large halo immediately so a finger does not fully hide the node.
+    wireManager.setPressHighlight(terminal, evt);
+
     if (mode !== "lab") {
+      /**
+       * Clears the demo/read-only press halo on release.
+       */
+      function onDemoUp() {
+        stage.off(".terminalPress");
+        wireManager.clearPressHighlight();
+      }
+      stage.on("mouseup.terminalPress touchend.terminalPress", onDemoUp);
       return;
     }
 
     const group = terminal.componentGroup;
     const startPointer = stage.getPointerPosition();
     if (!startPointer) {
+      wireManager.clearPressHighlight();
       return;
     }
 
     let dragging = false;
+    const dragThreshold = wireDragThresholdForEvent(evt);
     group.draggable(false);
     if (typeof group.stopDrag === "function") {
       group.stopDrag();
@@ -740,7 +744,7 @@ export function bootCircuitLab(host, config) {
       const dy = pos.y - startPointer.y;
 
       if (!dragging) {
-        if (dx * dx + dy * dy < WIRE_DRAG_THRESHOLD * WIRE_DRAG_THRESHOLD) {
+        if (dx * dx + dy * dy < dragThreshold * dragThreshold) {
           return;
         }
         dragging = true;
@@ -754,6 +758,7 @@ export function bootCircuitLab(host, config) {
 
       const world = pointerToWorld(pos, view);
       wireManager.setDraftDrag(terminal, world);
+      wireManager.setSnapHighlight(wireManager.terminalAtPointer(stage, terminal));
     }
 
     /**
@@ -769,12 +774,15 @@ export function bootCircuitLab(host, config) {
         return;
       }
 
+      wireManager.clearSnapHighlight();
       // Tap: pending / complete two-click connect.
       if (wireMenu) {
         wireMenu.close();
       }
       wireManager.clearWireSelection();
       wireManager.handleTerminalClick(terminal, wireColor, true);
+      // Drop press tracking; pending stays highlighted via sticky check.
+      wireManager.clearPressHighlight();
     }
 
     stage.on("mousemove.terminalWire touchmove.terminalWire", onMove);
@@ -851,28 +859,6 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Returns whether a Konva event target is the doorbell press pad.
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isButtonPadTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    return target.name() === "button-pad";
-  }
-
-  /**
-   * Returns whether a Konva event target is the SPST switch hit area.
-   * @param {Konva.Node} target - Event target node.
-   */
-  function isSwitchHitTarget(target) {
-    if (!target || !target.name) {
-      return false;
-    }
-    return target.name() === "switch-hit";
-  }
-
-  /**
    * Binds press/release interaction on a doorbell button.
    * @param {Konva.Group} button - Button component.
    */
@@ -889,7 +875,6 @@ export function bootCircuitLab(host, config) {
     });
 
     pad.on("mouseenter", function () {
-      stage.container().style.cursor = "pointer";
       if (!button.isPressed) {
         applyDoorbellButtonVisual(button, { hovered: true });
         componentLayer.batchDraw();
@@ -897,7 +882,6 @@ export function bootCircuitLab(host, config) {
     });
 
     pad.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
       applyDoorbellButtonVisual(button, { hovered: false });
       componentLayer.batchDraw();
       if (!button.isPressed) {
@@ -937,14 +921,6 @@ export function bootCircuitLab(host, config) {
     hit.on("click tap", function (evt) {
       evt.cancelBubble = true;
       handleToggleSwitch(sw);
-    });
-
-    hit.on("mouseenter", function () {
-      stage.container().style.cursor = "pointer";
-    });
-
-    hit.on("mouseleave", function () {
-      stage.container().style.cursor = "default";
     });
   }
 
@@ -1177,10 +1153,6 @@ export function bootCircuitLab(host, config) {
         }
         panning = true;
         suppressStageClick = true;
-        if (stageWrap) {
-          stageWrap.classList.add("lab-stage-wrap--panning");
-        }
-        stage.container().style.cursor = "grabbing";
       }
 
       setView({

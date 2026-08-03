@@ -10,8 +10,8 @@ export const PINCH_ZOOM_INTENSITY = 0.01;
 export const EDGE_MARGIN = 72;
 /** Pointer travel (stage px) before an empty-canvas press counts as a pan. */
 export const PAN_DRAG_THRESHOLD = 4;
-/** Default cursor for empty canvas (maps-style grab-to-pan). */
-export const STAGE_DEFAULT_CURSOR = "grab";
+/** Default cursor for the canvas (arrow; pan still works without a hand cursor). */
+export const STAGE_DEFAULT_CURSOR = "default";
 
 /** @typedef {{ scale: number; x: number; y: number }} ViewState */
 /** @typedef {{ width: number; height: number }} StageSize */

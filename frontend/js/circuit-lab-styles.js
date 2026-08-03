@@ -165,7 +165,7 @@ export const CIRCUIT_LAB_CSS = `
   width: 100%;
   min-height: 0;
   overflow: hidden;
-  cursor: grab;
+  cursor: default;
   /* Let Konva own touch pans/zooms instead of the browser scrolling the page. */
   touch-action: none;
   overscroll-behavior: none;
@@ -177,10 +177,6 @@ export const CIRCUIT_LAB_CSS = `
     transparent 1px
   );
   background-size: 24px 24px;
-}
-
-.lab-stage-wrap--panning {
-  cursor: grabbing;
 }
 
 .lab-stage {
