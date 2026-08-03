@@ -179,7 +179,34 @@ export const CIRCUIT_LAB_CSS = `
   background-size: 24px 24px;
 }
 
+/* Decorative brand mark — fixed to the viewport, never captures input. */
+.lab-stage-wrap::before {
+  content: "AndyLabs";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  user-select: none;
+  font-family: "Avenir Next", "Century Gothic", Futura, "Trebuchet MS",
+    sans-serif;
+  font-size: clamp(2.75rem, 11vw, 6.5rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgba(63, 63, 70, 0.1);
+  -webkit-text-stroke: 1px rgba(63, 63, 70, 0.12);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.45),
+    0 12px 28px rgba(24, 24, 27, 0.05);
+  transform: rotate(-18deg);
+}
+
 .lab-stage {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
 }
