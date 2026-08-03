@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import Konva from "konva";
 import { createWireManager } from "../js/wires.js";
 import { WIRE_TENSION } from "../js/wire-path.js";
+import { lightenHex } from "../js/wire-tint.js";
 
 describe("createWireManager", () => {
   /** @type {Konva.Stage[]} */
@@ -91,6 +92,34 @@ describe("createWireManager", () => {
     expect(wire.colorKey).toBe("green");
     expect(wire.line.stroke()).toBe("#16a34a");
     expect(wire.line.strokeWidth()).toBe(5);
+  });
+
+  it("tints bend handles from the wire color and shows a press halo", () => {
+    const harness = makeHarness({
+      getView: function () {
+        return { scale: 1, x: 0, y: 0 };
+      },
+    });
+    const wire = harness.manager.connectTerminals(harness.a, harness.b, "red");
+    harness.manager.selectWire(wire, { x: 100, y: 40 });
+    expect(wire.midHandles.length).toBeGreaterThan(0);
+    const mid = wire.midHandles[0];
+    expect(mid.dot.fill()).toBe(lightenHex("#dc2626", 0.82));
+    expect(mid.dot.stroke()).toBe(lightenHex("#dc2626", 0.28));
+    expect(mid.halo.visible()).toBe(false);
+
+    harness.stage.getPointerPosition = function () {
+      return { x: mid.x(), y: mid.y() };
+    };
+    mid.fire("mousedown", {
+      evt: { type: "mousedown", preventDefault() {} },
+      target: mid,
+      currentTarget: mid,
+      type: "mousedown",
+      cancelBubble: false,
+    });
+    expect(mid.halo.visible()).toBe(true);
+    expect(mid.halo.fill().startsWith("rgba(")).toBe(true);
   });
 
   it("magnetically connects on drag-drop near a terminal and skips self", () => {

@@ -1,13 +1,20 @@
 import Konva from "konva";
 import { STAGE_DEFAULT_CURSOR } from "./canvas-nav.js";
 import { WIRE_COLORS } from "./components/constants.js";
-import { getTerminalComponentGroup, getTerminalPosition, setTerminalHighlightVisual } from "./components/shared.js";
+import {
+  TERMINAL_HIGHLIGHT_HALO_RADIUS,
+  TERMINAL_HIGHLIGHT_HALO_RADIUS_TOUCH,
+  getTerminalComponentGroup,
+  getTerminalPosition,
+  setTerminalHighlightVisual,
+} from "./components/shared.js";
 import {
   TERMINAL_SNAP_SCREEN_RADIUS,
   isTouchPointerEvent,
   nearestTerminalInScreenRadius,
   wireDragThresholdForEvent,
 } from "./terminal-snap.js";
+import { bendHandleColors } from "./wire-tint.js";
 import {
   WIRE_TENSION,
   findClosestSegmentIndex,
@@ -50,6 +57,19 @@ function bindBendHandleCursor(handle) {
       stage.container().style.cursor = STAGE_DEFAULT_CURSOR;
     }
   });
+}
+
+/**
+ * World-space halo radius that keeps a roughly constant screen size.
+ * @param {boolean} touch - Whether the gesture is a touch press.
+ * @param {number} viewScale - Current camera scale.
+ */
+function bendHaloRadius(touch, viewScale) {
+  const screenPx = touch
+    ? TERMINAL_HIGHLIGHT_HALO_RADIUS_TOUCH
+    : TERMINAL_HIGHLIGHT_HALO_RADIUS;
+  const scale = viewScale > 0 ? viewScale : 1;
+  return screenPx / scale;
 }
 
 /**
@@ -465,6 +485,82 @@ export function createWireManager(layer, options) {
   }
 
   /**
+   * Current camera scale for screen-sized bend halos.
+   */
+  function currentViewScale() {
+    const view = typeof getView === "function" ? getView() : null;
+    return view && typeof view.scale === "number" && view.scale > 0 ? view.scale : 1;
+  }
+
+  /**
+   * Shows or hides the large press halo on a bend / midpoint handle.
+   * @param {Konva.Group} handle - Handle group from createBendHandleNode.
+   * @param {boolean} on - Whether the press halo is active.
+   * @param {Konva.KonvaEventObject|Event|null|undefined} [evt] - Gesture event.
+   */
+  function setBendHandlePressVisual(handle, on, evt) {
+    if (!handle || !handle.halo || !handle.dot) {
+      return;
+    }
+    if (on) {
+      handle.halo.radius(bendHaloRadius(isTouchPointerEvent(evt), currentViewScale()));
+      handle.halo.visible(true);
+      handle.dot.strokeWidth(handle.isMidpoint ? 2.5 : 3);
+    } else {
+      handle.halo.visible(false);
+      handle.dot.strokeWidth(handle.isMidpoint ? 1.5 : 2);
+    }
+    layer.batchDraw();
+  }
+
+  /**
+   * Builds a bend or midpoint handle group tinted from the wire color.
+   * @param {object} wire - Wire record.
+   * @param {number} x - Layer x.
+   * @param {number} y - Layer y.
+   * @param {{ midpoint?: boolean, draggable?: boolean }} [opts] - Handle options.
+   */
+  function createBendHandleNode(wire, x, y, opts) {
+    const options = opts || {};
+    const midpoint = !!options.midpoint;
+    const colors = bendHandleColors(WIRE_COLORS[wire.colorKey] || WIRE_COLORS.black);
+    const group = new Konva.Group({
+      x: x,
+      y: y,
+      draggable: !!options.draggable,
+      name: midpoint ? "bend-midpoint" : "bend-handle",
+    });
+    const halo = new Konva.Circle({
+      x: 0,
+      y: 0,
+      radius: bendHaloRadius(false, currentViewScale()),
+      fill: colors.haloFill,
+      stroke: colors.haloStroke,
+      strokeWidth: 2.5,
+      listening: false,
+      visible: false,
+      name: "bend-handle-halo",
+    });
+    const dot = new Konva.Circle({
+      x: 0,
+      y: 0,
+      radius: midpoint ? BEND_HANDLE_RADIUS - 1 : BEND_HANDLE_RADIUS,
+      fill: colors.fill,
+      stroke: colors.stroke,
+      strokeWidth: midpoint ? 1.5 : 2,
+      hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
+      opacity: midpoint ? 0.95 : 1,
+      name: midpoint ? "bend-midpoint-dot" : "bend-handle-dot",
+    });
+    group.add(halo);
+    group.add(dot);
+    group.halo = halo;
+    group.dot = dot;
+    group.isMidpoint = midpoint;
+    return group;
+  }
+
+  /**
    * Hides and destroys bend / midpoint handles for a wire.
    * @param {object} wire - Wire record.
    */
@@ -508,19 +604,10 @@ export function createWireManager(layer, options) {
     for (let i = 0; i < mids.length; i += 1) {
       (function (segmentIndex) {
         const mid = mids[segmentIndex];
-        const handle = new Konva.Circle({
-          x: mid.x,
-          y: mid.y,
-          radius: BEND_HANDLE_RADIUS - 1,
-          fill: "#dbeafe",
-          stroke: "#93c5fd",
-          strokeWidth: 1.5,
-          hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
-          opacity: 0.9,
-          name: "bend-midpoint",
-        });
+        const handle = createBendHandleNode(wire, mid.x, mid.y, { midpoint: true });
         handle.on("mousedown touchstart", function (evt) {
-          beginMidpointDrag(wire, segmentIndex, evt);
+          setBendHandlePressVisual(handle, true, evt);
+          beginMidpointDrag(wire, segmentIndex, evt, handle);
         });
         handle.on("click tap", function (evt) {
           evt.cancelBubble = true;
@@ -537,8 +624,9 @@ export function createWireManager(layer, options) {
    * @param {object} wire - Wire record.
    * @param {number} segmentIndex - Segment index for the new bend.
    * @param {Konva.KonvaEventObject} e - Pointer down event.
+   * @param {Konva.Group} [pressHandle] - Midpoint handle showing the press halo.
    */
-  function beginMidpointDrag(wire, segmentIndex, e) {
+  function beginMidpointDrag(wire, segmentIndex, e, pressHandle) {
     e.cancelBubble = true;
     if (e.evt && e.evt.preventDefault) {
       e.evt.preventDefault();
@@ -549,6 +637,7 @@ export function createWireManager(layer, options) {
     }
     const startPointer = stage.getPointerPosition();
     if (!startPointer) {
+      setBendHandlePressVisual(pressHandle, false);
       return;
     }
     const start = { x: startPointer.x, y: startPointer.y };
@@ -584,16 +673,10 @@ export function createWireManager(layer, options) {
         for (let i = 0; i < wire.bends.length; i += 1) {
           (function (index) {
             const bend = wire.bends[index];
-            const handle = new Konva.Circle({
-              x: bend.x,
-              y: bend.y,
-              radius: BEND_HANDLE_RADIUS,
-              fill: "#ffffff",
-              stroke: "#2563eb",
-              strokeWidth: 2,
-              hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
-              name: "bend-handle",
-            });
+            const handle = createBendHandleNode(wire, bend.x, bend.y, {});
+            if (index === bendIndex) {
+              setBendHandlePressVisual(handle, true, e);
+            }
             bindBendHandleCursor(handle);
             layer.add(handle);
             wire.handles.push(handle);
@@ -620,6 +703,9 @@ export function createWireManager(layer, options) {
      */
     function onUp() {
       stage.off(".wireMidpoint");
+      if (!inserted) {
+        setBendHandlePressVisual(pressHandle, false);
+      }
       if (inserted) {
         showBendHandles(wire);
         notifyChange();
@@ -645,25 +731,19 @@ export function createWireManager(layer, options) {
     for (let i = 0; i < wire.bends.length; i += 1) {
       (function (bendIndex) {
         const bend = wire.bends[bendIndex];
-        const handle = new Konva.Circle({
-          x: bend.x,
-          y: bend.y,
-          radius: BEND_HANDLE_RADIUS,
-          fill: "#ffffff",
-          stroke: "#2563eb",
-          strokeWidth: 2,
-          hitStrokeWidth: BEND_HANDLE_HIT_STROKE,
+        const handle = createBendHandleNode(wire, bend.x, bend.y, {
           draggable: true,
-          name: "bend-handle",
         });
 
         handle.on("mousedown touchstart", function (evt) {
           evt.cancelBubble = true;
+          setBendHandlePressVisual(handle, true, evt);
         });
 
         handle.on("dragstart", function () {
           pushHistory();
           destroyMidHandles(wire);
+          setBendHandlePressVisual(handle, true);
           const stage = handle.getStage();
           if (stage) {
             stage.container().style.cursor = "crosshair";
@@ -678,12 +758,20 @@ export function createWireManager(layer, options) {
         });
 
         handle.on("dragend", function () {
+          setBendHandlePressVisual(handle, false);
           refreshMidpointHandles(wire);
           layer.batchDraw();
           notifyChange();
           const stage = handle.getStage();
           if (stage) {
             stage.container().style.cursor = "crosshair";
+          }
+        });
+
+        handle.on("mouseup touchend", function () {
+          // Tap without drag — clear press halo (dragend also clears).
+          if (!handle.isDragging()) {
+            setBendHandlePressVisual(handle, false);
           }
         });
 
@@ -967,10 +1055,11 @@ export function createWireManager(layer, options) {
     pushHistory();
     wire.colorKey = colorKey;
     applyWireStroke(wire, selectedWire === wire);
-    notifyChange();
     if (selectedWire === wire) {
+      showBendHandles(wire);
       notifySelectionChange(wire, null);
     }
+    notifyChange();
     layer.batchDraw();
   }
 
