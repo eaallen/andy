@@ -98,13 +98,13 @@ describe("parseLaunchClaims", () => {
     expect(claims.gradePassback).toBe(false);
   });
 
-  it("accepts a missing or empty launch_id", () => {
-    expect(parseLaunchClaims({ ...launchPayload, launch_id: "" }).launchId).toBe(
-      "",
-    );
-    expect(
-      parseLaunchClaims({ ...launchPayload, launch_id: undefined }).launchId,
-    ).toBe("");
+  it("rejects a missing or empty launch_id", () => {
+    expect(() =>
+      parseLaunchClaims({ ...launchPayload, launch_id: "" }),
+    ).toThrow(/launch_id/);
+    expect(() =>
+      parseLaunchClaims({ ...launchPayload, launch_id: undefined }),
+    ).toThrow(/launch_id/);
   });
 
   it("drops non-string location params", () => {
@@ -427,6 +427,25 @@ describe("JWT verify + launch receiver", () => {
       score: 1,
       syncStatus: "synced",
     });
+  });
+
+  it("rejects a launch token with an empty launch_id", async () => {
+    const token = await signLaunch({ ...launchPayload, launch_id: "" });
+    const app = new Hono<{ Bindings: Env }>();
+    app.route("/", voshiRoutes({ getKey, replay: createMemoryReplayStore() }));
+
+    const res = await app.request(
+      "http://localhost/launch",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `launch_data=${encodeURIComponent(token)}`,
+      },
+      testEnv(),
+    );
+
+    expect(res.status).toBe(422);
+    expect(await res.text()).toMatch(/launch_id/);
   });
 
   it("defaults a missing grade score to 0", async () => {

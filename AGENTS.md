@@ -35,7 +35,7 @@ Voshi sits between the LMS and Andy. Do **not** implement LTI (OIDC, platform JW
 - Locations: use type `assessment` for graded labs. Set param `lab` to a catalog id (`doorbell`, `single-pole-lamp`, …). Home / missing param opens the picker.
 - Apps start as `draft`. Ask the MyEducator team to **activate** before LMS testing. Localhost callbacks are rejected; use a public HTTPS tunnel.
 - `VOSHI_COOKIE_PASSWORD` (≥32 chars) encrypts the LMS session cookie; falls back to `WORKOS_COOKIE_PASSWORD`.
-- Passing **Check** in an assessment launch POSTs score `1.0` to Voshi (only when `grade_passback` is true and the role is `student`).
+- **Submit** on a graded student assessment launch POSTs the current Check score (`1.0` pass / `0.0` fail) to Voshi (only when `grade_passback` is true). Check itself stays local.
 
 ### Dev
 

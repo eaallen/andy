@@ -18,6 +18,7 @@ export type VoshiGradeResult = {
  */
 export function canSubmitGrade(session: VoshiSession): boolean {
   return (
+    Boolean(session.launchId) &&
     session.role === "student" &&
     session.gradePassback &&
     session.locationType === "assessment"

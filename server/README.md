@@ -47,7 +47,7 @@ Andy does not speak LTI. [Voshi](https://myeducator-llc.github.io/voshi-docs/) v
 3. Ask MyEducator to activate the app (`draft` apps cannot be launched). The callback must be public HTTPS — not localhost.
 4. Set `VOSHI_COOKIE_PASSWORD` (or rely on `WORKOS_COOKIE_PASSWORD`) to at least 32 characters.
 
-Student **Check** pass on a graded launch sends score `1.0` to the LMS. Instructor launches do not send grades. If the LMS did not create a line item (`grade_passback: false`), Check still runs locally and grade passback is skipped.
+**Submit** on a graded student launch sends the current circuit score (`1.0` pass / `0.0` fail) to the LMS. Check stays local. Instructor launches do not send grades. If the LMS did not create a line item (`grade_passback: false`), Submit is hidden.
 
 ## Providers
 

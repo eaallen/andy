@@ -85,10 +85,47 @@
   }
 
   /**
-   * Sends a passing score to Andy's Voshi grade endpoint (server holds the API key).
+   * Switches the mounted lab to Lab mode if needed, runs Check, and returns the result.
+   * @param {HTMLElement} root - #lab-root that contains the circuit host.
    */
-  function submitPassingGrade() {
-    setGradeStatus("Sending grade…", true);
+  function gradeCurrentLab(root) {
+    const host = root.querySelector(".circuit-lab");
+    if (!(host instanceof HTMLElement) || !host.shadowRoot) {
+      return null;
+    }
+    const labBtn = host.shadowRoot.querySelector('[data-lab-mode="lab"]');
+    if (labBtn instanceof HTMLButtonElement && labBtn.getAttribute("aria-pressed") !== "true") {
+      labBtn.click();
+    }
+    const checkBtn = host.shadowRoot.querySelector('[data-lab-action="check"]');
+    if (!(checkBtn instanceof HTMLButtonElement) || checkBtn.disabled) {
+      return null;
+    }
+    /** @type {{ pass?: boolean; failures?: string[] } | null} */
+    let detail = null;
+    /**
+     * Captures the Check result from the lab host.
+     * @param {Event} event - andy:lab-check custom event.
+     */
+    function onCheck(event) {
+      detail = event instanceof CustomEvent ? event.detail : null;
+    }
+    host.addEventListener("andy:lab-check", onCheck);
+    checkBtn.click();
+    host.removeEventListener("andy:lab-check", onCheck);
+    return detail;
+  }
+
+  /**
+   * POSTs a 0–1 score to Andy's Voshi grade endpoint (server holds the API key).
+   * @param {number} score - Fraction to send (0 or 1).
+   * @param {HTMLButtonElement} [button] - Submit control to disable while sending.
+   */
+  function submitGrade(score, button) {
+    if (button) {
+      button.disabled = true;
+    }
+    setGradeStatus("Sending score…", true);
     fetch("/api/voshi/grade", {
       method: "POST",
       headers: {
@@ -96,7 +133,7 @@
         Accept: "application/json",
       },
       credentials: "same-origin",
-      body: JSON.stringify({ score: 1 }),
+      body: JSON.stringify({ score: score }),
     })
       .then(async function (response) {
         const body = await response.json();
@@ -107,15 +144,39 @@
           const message =
             result.body && result.body.error
               ? result.body.error
-              : "Grade could not be sent.";
+              : "Score could not be sent.";
           setGradeStatus(message, false);
           return;
         }
-        setGradeStatus("Grade sent to the gradebook.", true);
+        const percent = Math.round(score * 100);
+        setGradeStatus("Score sent to the gradebook (" + percent + "%).", true);
       })
       .catch(function () {
-        setGradeStatus("Grade could not be sent.", false);
+        setGradeStatus("Score could not be sent.", false);
+      })
+      .then(function () {
+        if (button) {
+          button.disabled = false;
+        }
       });
+  }
+
+  /**
+   * Grades the current circuit and sends that score to the gradebook.
+   * @param {HTMLElement} root - #lab-root.
+   * @param {HTMLButtonElement} button - Submit control.
+   */
+  function submitCurrentGrade(root, button) {
+    if (!root.querySelector(".circuit-lab")) {
+      setGradeStatus("Lab is still loading.", false);
+      return;
+    }
+    const detail = gradeCurrentLab(root);
+    if (!detail) {
+      setGradeStatus("Open Lab mode to submit a score.", false);
+      return;
+    }
+    submitGrade(detail.pass ? 1 : 0, button);
   }
 
   /**
@@ -167,12 +228,10 @@
       throw new Error("Missing #lab-root");
     }
 
-    if (ctx && ctx.canGrade) {
-      root.addEventListener("andy:lab-check", function (event) {
-        const detail = event instanceof CustomEvent ? event.detail : null;
-        if (detail && detail.pass) {
-          submitPassingGrade();
-        }
+    const submitBtn = document.getElementById("voshi-submit-grade");
+    if (submitBtn instanceof HTMLButtonElement) {
+      submitBtn.addEventListener("click", function () {
+        submitCurrentGrade(root, submitBtn);
       });
     }
 

@@ -2,6 +2,7 @@ import type { FC } from "hono/jsx";
 import type { SessionUser } from "@/auth/session.js";
 import { Layout } from "@/pages/layout.js";
 import {
+  labClientContext,
   serializeLabClientContext as sterilizeLabClientContext,
 } from "@/voshi/context.js";
 import type { VoshiSession } from "@/voshi/session.js";
@@ -18,6 +19,7 @@ type PageProps = {
 export const LabPage: FC<PageProps> = (props) => {
   const voshi = props.voshi ?? null;
   const studentLaunch = voshi?.role === "student";
+  const canGrade = voshi ? labClientContext(voshi).canGrade : false;
 
   return (
     <Layout
@@ -36,12 +38,27 @@ export const LabPage: FC<PageProps> = (props) => {
             Lab
           </label>
           <select id="lab-select" class="lab-picker-select"></select>
-          {studentLaunch ? null : (
-            <a class="lab-picker-author" href="/author">
-              Create from image
-            </a>
-          )}
-          <span id="voshi-grade-status" class="lab-picker-status" hidden></span>
+          <div class="lab-picker-end">
+            {studentLaunch ? null : (
+              <a class="lab-picker-author" href="/author">
+                Create from image
+              </a>
+            )}
+            {canGrade ? (
+              <button
+                type="button"
+                id="voshi-submit-grade"
+                class="lab-picker-submit"
+              >
+                Submit
+              </button>
+            ) : null}
+            <span
+              id="voshi-grade-status"
+              class="lab-picker-status"
+              hidden
+            ></span>
+          </div>
         </nav>
         {voshi ? (
           // I really dislike this idea. seems like since we are doing server side rendering 

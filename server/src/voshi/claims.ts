@@ -130,7 +130,7 @@ export function parseLaunchClaims(payload: unknown): LaunchClaims {
       : {};
 
   const problems: string[] = [];
-  const launchId = trimmedStringOrEmpty(raw.launch_id); // we may want to make this required. 
+  const launchId = readRequiredString(raw.launch_id, "launch_id", problems);
   const userId = readRequiredString(user.id, "user.id", problems);
   const role = readAllowedString(user.role, "user.role", ROLE_SET, problems);
   const courseId = readRequiredString(course.id, "course.id", problems);
