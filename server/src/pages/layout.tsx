@@ -10,6 +10,9 @@ type LayoutProps = PropsWithChildren<{
   scripts?: string[];
   bodyClass?: string;
   user?: SessionUser | null;
+  /** LMS iframe chrome: hide marketing nav. */
+  embed?: boolean;
+  embedLabel?: string;
 }>;
 
 /**
@@ -44,41 +47,47 @@ export const Layout: FC<LayoutProps> = (props) => {
       </head>
       <body class={props.bodyClass ?? ""}>
         <header class="site-nav">
-          <a class="site-nav-brand" href="/">
+          <a class="site-nav-brand" href={props.embed ? "/lab" : "/"}>
             Andy
           </a>
-          <nav class="site-nav-links" aria-label="Primary">
-            <a class={props.active === "home" ? "is-active" : ""} href="/">
-              About
-            </a>
-            <a class={props.active === "lab" ? "is-active" : ""} href="/lab">
-              Lab
-            </a>
-            <a
-              class={props.active === "author" ? "is-active" : ""}
-              href="/author"
-            >
-              Author
-            </a>
-          </nav>
-          <div class="site-nav-auth">
-            {user ? (
-              <>
-                <span class="site-nav-email" title={user.email}>
-                  {user.email}
-                </span>
-                <form class="site-nav-logout" method="post" action="/logout">
-                  <button type="submit" class="site-nav-signout">
-                    Sign out
-                  </button>
-                </form>
-              </>
-            ) : (
-              <a class="site-nav-signin" href="/login?returnTo=/author">
-                Sign in
-              </a>
-            )}
-          </div>
+          {props.embed ? (
+            <span class="site-nav-embed">{props.embedLabel || "Circuit Lab"}</span>
+          ) : (
+            <>
+              <nav class="site-nav-links" aria-label="Primary">
+                <a class={props.active === "home" ? "is-active" : ""} href="/">
+                  About
+                </a>
+                <a class={props.active === "lab" ? "is-active" : ""} href="/lab">
+                  Lab
+                </a>
+                <a
+                  class={props.active === "author" ? "is-active" : ""}
+                  href="/author"
+                >
+                  Author
+                </a>
+              </nav>
+              <div class="site-nav-auth">
+                {user ? (
+                  <>
+                    <span class="site-nav-email" title={user.email}>
+                      {user.email}
+                    </span>
+                    <form class="site-nav-logout" method="post" action="/logout">
+                      <button type="submit" class="site-nav-signout">
+                        Sign out
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <a class="site-nav-signin" href="/login?returnTo=/author">
+                    Sign in
+                  </a>
+                )}
+              </div>
+            </>
+          )}
         </header>
         {props.children}
         {scripts.map((src) => (

@@ -66,6 +66,13 @@ a {
   margin-left: auto;
 }
 
+.site-nav-embed {
+  margin-left: auto;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .site-nav-email {
   font-size: 0.85rem;
   color: var(--muted);

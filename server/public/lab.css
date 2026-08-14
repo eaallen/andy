@@ -67,6 +67,20 @@ body.lab-body::before {
   text-decoration: underline;
 }
 
+.lab-picker-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: #71717a;
+}
+
+.lab-picker-status.is-ok {
+  color: #0f766e;
+}
+
+.lab-picker-status.is-err {
+  color: #b91c1c;
+}
+
 .lab-root {
   flex: 1 1 auto;
   min-height: 0;

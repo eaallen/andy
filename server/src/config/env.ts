@@ -20,6 +20,10 @@ export type Env = {
   WORKOS_REDIRECT_URI?: string;
   /** WorkOS organization to auto-select (and add new signups to). */
   WORKOS_ORGANIZATION_ID?: string;
+  /** Voshi app API key (`ltiaas_…`) for grade passback. */
+  VOSHI_API_KEY?: string;
+  /** Encrypts the Voshi session cookie. Falls back to WORKOS_COOKIE_PASSWORD. */
+  VOSHI_COOKIE_PASSWORD?: string;
   ASSETS: Fetcher;
 };
 
@@ -40,6 +44,8 @@ export type AppConfig = {
   workosCookiePassword: string;
   workosRedirectUri: string;
   workosOrganizationId: string;
+  voshiApiKey: string;
+  voshiCookiePassword: string;
 };
 
 /**
@@ -90,6 +96,10 @@ export function getAppConfig(env: Env): AppConfig {
     workosCookiePassword: optional(env.WORKOS_COOKIE_PASSWORD),
     workosRedirectUri: optional(env.WORKOS_REDIRECT_URI),
     workosOrganizationId: optional(env.WORKOS_ORGANIZATION_ID),
+    voshiApiKey: optional(env.VOSHI_API_KEY),
+    voshiCookiePassword:
+      optional(env.VOSHI_COOKIE_PASSWORD) ||
+      optional(env.WORKOS_COOKIE_PASSWORD),
   };
 }
 

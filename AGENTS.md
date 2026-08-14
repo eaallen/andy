@@ -15,6 +15,7 @@ This is an **npm workspaces monorepo**:
 npm install
 cp server/.env.example server/.dev.vars   # set GEMINI_API_KEY or META_API_KEY (or AI_PROVIDER=demo)
 # Also set WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_COOKIE_PASSWORD (WorkOS)
+# LMS: VOSHI_API_KEY (and optional VOSHI_COOKIE_PASSWORD)
 ```
 
 Requires **Node.js ≥ 20**.
@@ -25,6 +26,16 @@ Requires **Node.js ≥ 20**.
 - Protects `/author` and `POST /api/diagrams/*`. `/` and `/lab` stay public.
 - Local redirects: callback `http://localhost:6767/callback`, sign-in endpoint `/auth/initiate` (impersonation), sign-out `/`.
 - Export emails: `npm run export:users -w @andy/server > users.csv`
+
+### LMS (Voshi)
+
+Voshi sits between the LMS and Andy. Do **not** implement LTI (OIDC, platform JWKS, AGS, deep linking). Instructors place Andy via Voshi's content picker; Voshi POSTs a signed JWT to `POST /launch`.
+
+- Register the app at https://zen.voshi.com/app/ltiaas/s/ with callback `https://<host>/launch`. Copy `VOSHI_API_KEY` immediately.
+- Locations: use type `assessment` for graded labs. Set param `lab` to a catalog id (`doorbell`, `single-pole-lamp`, …). Home / missing param opens the picker.
+- Apps start as `draft`. Ask the MyEducator team to **activate** before LMS testing. Localhost callbacks are rejected; use a public HTTPS tunnel.
+- `VOSHI_COOKIE_PASSWORD` (≥32 chars) encrypts the LMS session cookie; falls back to `WORKOS_COOKIE_PASSWORD`.
+- Passing **Check** in an assessment launch POSTs score `1.0` to Voshi (only when `grade_passback` is true and the role is `student`).
 
 ### Dev
 
@@ -41,6 +52,8 @@ Routes served by the Worker:
 | `/lab` | Circuit lab shell (loads `/andy.js` + `/labs/*.yaml`) |
 | `/author` | Diagram → YAML author UI (auth required) |
 | `/login`, `/signup` (POST), `/callback`, `/logout`, `/auth/initiate` | On-site WorkOS auth |
+| `/launch` | Voshi LMS launch receiver (form POST `launch_data`) |
+| `/api/voshi/grade` | Grade passback for LMS launches (Voshi session) |
 | `/api/diagrams/*` | AI diagram API (auth required) |
 | `/andy.js`, `/labs/*` | Static client lib + lab YAML |
 

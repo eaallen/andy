@@ -3,9 +3,11 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { diagramsRoutes } from "@/routes/diagrams.js";
 import { authRoutes } from "@/routes/auth.js";
+import { voshiRoutes } from "@/routes/voshi.js";
 import { getAppConfig, type Env } from "@/config/env.js";
 import { getSessionUser, type SessionUser } from "@/auth/session.js";
 import { requireAuth } from "@/auth/middleware.js";
+import { getVoshiSession } from "@/voshi/context.js";
 import { HomePage } from "@/pages/home.js";
 import { LabPage } from "@/pages/lab.js";
 import { AuthorPage } from "@/pages/author.js";
@@ -42,6 +44,7 @@ app.get("/health", (c) => {
 });
 
 app.route("/", authRoutes);
+app.route("/", voshiRoutes());
 
 app.get("/", async (c) => {
   const user = await getSessionUser(c);
@@ -50,7 +53,8 @@ app.get("/", async (c) => {
 
 app.get("/lab", async (c) => {
   const user = await getSessionUser(c);
-  return c.html(<LabPage user={user} />);
+  const voshi = await getVoshiSession(c);
+  return c.html(<LabPage user={user} voshi={voshi} />);
 });
 
 app.get("/author", requireAuth, async (c) => {

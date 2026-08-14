@@ -41,6 +41,7 @@ The site serves:
 | `/` | Project overview |
 | `/lab` | Lab picker (`?lab=doorbell`, `?lab=draft`, …) |
 | `/author` | Create a lab from a diagram image |
+| `/launch` | LMS entry (Voshi POSTs `launch_data` here) |
 
 Pages load the IIFE client library at `/andy.js` (`AndyCircuitLab.mountCircuitLab` / `scanAndMountLabs`).
 
@@ -90,6 +91,12 @@ Response:
 ```
 
 `GET /health` — liveness + configured provider.
+
+## LMS (Voshi)
+
+Course placement and LTI are handled by [Voshi](https://myeducator-llc.github.io/voshi-docs/). Andy only receives a verified launch JWT at `POST /launch` and can push a 0–1 score via `POST /api/voshi/grade`.
+
+See [`server/README.md`](server/README.md#lms-voshi) for dashboard setup, location params (`lab=doorbell`), and secrets (`VOSHI_API_KEY`, `VOSHI_COOKIE_PASSWORD`).
 
 ## Included labs
 

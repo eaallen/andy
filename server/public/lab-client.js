@@ -36,16 +36,86 @@
   ];
 
   /**
-   * Resolves the lab entry from the ?lab= query param (defaults to first lab).
+   * Reads LMS launch context embedded by the lab page (absent on public /lab).
+   * 
+   * Note: Reading the lab context directly from the dom seems like a bad idea to me. 
+   * I would think there is another context we can use to make this work better. 
    */
-  function currentLab() {
-    const key = new URLSearchParams(location.search).get("lab");
+  function readLabContext() {
+    const el = document.getElementById("andy-lab-context");
+    if (!el || !el.textContent) {
+      return null;
+    }
+    try {
+      return JSON.parse(el.textContent);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Resolves the lab entry from LMS context or the ?lab= query param.
+   * @param {{ labId?: string | null } | null} ctx - Embedded LMS context.
+   */
+  function currentLab(ctx) {
+    const key =
+      (ctx && ctx.labId) || new URLSearchParams(location.search).get("lab");
     for (let i = 0; i < LABS.length; i += 1) {
       if (LABS[i].id === key) {
         return LABS[i];
       }
     }
     return LABS[0];
+  }
+
+  /**
+   * Shows grade passback status next to the lab picker.
+   * @param {string} text - Status message.
+   * @param {boolean} [ok] - True for success styling.
+   */
+  function setGradeStatus(text, ok) {
+    const status = document.getElementById("voshi-grade-status");
+    if (!(status instanceof HTMLElement)) {
+      return;
+    }
+    status.hidden = !text;
+    status.textContent = text;
+    status.classList.toggle("is-ok", Boolean(ok));
+    status.classList.toggle("is-err", Boolean(text) && !ok);
+  }
+
+  /**
+   * Sends a passing score to Andy's Voshi grade endpoint (server holds the API key).
+   */
+  function submitPassingGrade() {
+    setGradeStatus("Sending grade…", true);
+    fetch("/api/voshi/grade", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ score: 1 }),
+    })
+      .then(async function (response) {
+        const body = await response.json();
+        return { ok: response.ok, body: body };
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          const message =
+            result.body && result.body.error
+              ? result.body.error
+              : "Grade could not be sent.";
+          setGradeStatus(message, false);
+          return;
+        }
+        setGradeStatus("Grade sent to the gradebook.", true);
+      })
+      .catch(function () {
+        setGradeStatus("Grade could not be sent.", false);
+      });
   }
 
   /**
@@ -57,8 +127,15 @@
       throw new Error("AndyCircuitLab failed to load (/andy.js).");
     }
 
-    const lab = currentLab();
+    const ctx = readLabContext();
+    const lab = currentLab(ctx);
     document.title = lab.label + " — Andy";
+
+    if (ctx && ctx.labId) {
+      const next = new URL(location.href);
+      next.searchParams.set("lab", ctx.labId);
+      history.replaceState(null, "", next);
+    }
 
     const select = document.getElementById("lab-select");
     if (!(select instanceof HTMLSelectElement)) {
@@ -75,11 +152,29 @@
       select.appendChild(option);
     }
 
-    select.addEventListener("change", function () {
-      const next = new URL(location.href);
-      next.searchParams.set("lab", select.value);
-      location.assign(next.toString());
-    });
+    if (ctx && ctx.lockPicker) {
+      select.disabled = true;
+    } else {
+      select.addEventListener("change", function () {
+        const next = new URL(location.href);
+        next.searchParams.set("lab", select.value);
+        location.assign(next.toString());
+      });
+    }
+
+    const root = document.getElementById("lab-root");
+    if (!root) {
+      throw new Error("Missing #lab-root");
+    }
+
+    if (ctx && ctx.canGrade) {
+      root.addEventListener("andy:lab-check", function (event) {
+        const detail = event instanceof CustomEvent ? event.detail : null;
+        if (detail && detail.pass) {
+          submitPassingGrade();
+        }
+      });
+    }
 
     let yaml = "";
     if (lab.id === "draft") {
@@ -99,10 +194,6 @@
       yaml = await response.text();
     }
 
-    const root = document.getElementById("lab-root");
-    if (!root) {
-      throw new Error("Missing #lab-root");
-    }
     const pre = document.createElement("pre");
     pre.className = "circuit-lab";
     const code = document.createElement("code");
