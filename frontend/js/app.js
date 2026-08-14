@@ -1043,6 +1043,16 @@ export function bootCircuitLab(host, config) {
     } else {
       setHint("Fail — " + result.failures.join(" "), "fail");
     }
+    host.dispatchEvent(
+      new CustomEvent("andy:lab-check", {
+        bubbles: true,
+        composed: true,
+        detail: {
+          pass: result.pass,
+          failures: result.failures.slice(),
+        },
+      }),
+    );
   }
 
   /**

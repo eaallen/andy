@@ -116,4 +116,33 @@ describe("circuit-lab pre mount", () => {
     expect(root.querySelector("pre.circuit-lab")).toBeNull();
     expect(hosts[0].shadowRoot.querySelector("[data-lab-stage]")).toBeTruthy();
   });
+
+  it("dispatches andy:lab-check when Check runs in lab mode", () => {
+    const pre = document.createElement("pre");
+    pre.className = "circuit-lab";
+    const code = document.createElement("code");
+    code.textContent = JSON.stringify({
+      title: "Check Event Lab",
+      margin: 40,
+      passMessage: "ok",
+      hints: { demo: "demo", lab: "lab" },
+      components: [{ id: "power", type: "power", x: 40, y: 40 }],
+      demo: { wires: [] },
+    });
+    pre.appendChild(code);
+    document.body.appendChild(pre);
+
+    const host = mountCircuitLab(pre);
+    const seen = [];
+    host.addEventListener("andy:lab-check", (event) => {
+      seen.push(event.detail);
+    });
+
+    host.shadowRoot.querySelector('[data-lab-mode="lab"]').click();
+    host.shadowRoot.querySelector('[data-lab-action="check"]').click();
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].pass).toBe(false);
+    expect(Array.isArray(seen[0].failures)).toBe(true);
+  });
 });

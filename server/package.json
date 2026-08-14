@@ -25,6 +25,7 @@
     "@google/genai": "^1.0.0",
     "@workos-inc/node": "^10.8.0",
     "hono": "^4.8.3",
+    "jose": "^6.2.8",
     "js-yaml": "^4.3.0",
     "openai": "^6.48.0"
   },
