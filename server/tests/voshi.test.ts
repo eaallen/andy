@@ -98,6 +98,15 @@ describe("parseLaunchClaims", () => {
     expect(claims.gradePassback).toBe(false);
   });
 
+  it("accepts a missing or empty launch_id", () => {
+    expect(parseLaunchClaims({ ...launchPayload, launch_id: "" }).launchId).toBe(
+      "",
+    );
+    expect(
+      parseLaunchClaims({ ...launchPayload, launch_id: undefined }).launchId,
+    ).toBe("");
+  });
+
   it("drops non-string location params", () => {
     const claims = parseLaunchClaims({
       ...launchPayload,
@@ -114,18 +123,12 @@ describe("parseLaunchClaims", () => {
       parseLaunchClaims({ ...launchPayload, user: { id: "u", role: "ta" } }),
     ).toThrow(/user\.role \(got "ta"\)/);
     expect(() =>
-      parseLaunchClaims({ ...launchPayload, launch_id: "" }),
-    ).toThrow(/launch_id/);
-    expect(() =>
       parseLaunchClaims({
         ...launchPayload,
-        launch_id: "",
         course: {},
         location: { type: "quiz" },
       }),
-    ).toThrow(
-      /launch_id, course\.id, location\.id, location\.type \(got "quiz"\)/,
-    );
+    ).toThrow(/course\.id, location\.id, location\.type \(got "quiz"\)/);
   });
 });
 
@@ -163,6 +166,7 @@ describe("session and grades helpers", () => {
     expect(
       canSubmitGrade(studentSession({ locationType: "practice" })),
     ).toBe(false);
+    expect(canSubmitGrade(studentSession({ launchId: "" }))).toBe(false);
   });
 
   it("rejects scores outside 0–1", () => {

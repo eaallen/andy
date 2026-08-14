@@ -2,7 +2,9 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "andy",
   "compatibility_date": "2026-07-23",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "main": "./src/index.ts",
   "workers_dev": true,
   "assets": {
@@ -21,6 +23,14 @@
     "MAX_UPLOAD_BYTES": "20971520",
     "WORKOS_CLIENT_ID": "client_01KY8HE5Q0W126SDZYQFHN51WQ",
     "WORKOS_ORGANIZATION_ID": "org_01KY8HB3B9Q1N5SNAWYKXSWVDB"
-
+  },
+  "secrets": {
+    "required": [
+      "GEMINI_API_KEY",
+      "WORKOS_API_KEY",
+      "WORKOS_COOKIE_PASSWORD",
+      "VOSHI_API_KEY",
+      "VOSHI_COOKIE_PASSWORD"
+    ]
   }
 }
