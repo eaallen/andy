@@ -18,6 +18,7 @@
     "deploy": "npm run deploy -w @andy/server",
     "test": "npm run test -w @andy/frontend && npm run test -w @andy/server",
     "test:frontend": "npm run test -w @andy/frontend",
+    "test:coverage": "npm run test:coverage -w @andy/frontend",
     "test:server": "npm run test -w @andy/server",
     "typecheck": "npm run typecheck -w @andy/server"
   },

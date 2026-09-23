@@ -12,6 +12,8 @@ export const EDGE_MARGIN = 72;
 export const PAN_DRAG_THRESHOLD = 4;
 /** Default cursor for the canvas (arrow; pan still works without a hand cursor). */
 export const STAGE_DEFAULT_CURSOR = "default";
+/** Default duration for animated camera moves to a hint target (ms). */
+export const FOCUS_ANIM_MS = 450;
 
 /** @typedef {{ scale: number; x: number; y: number }} ViewState */
 /** @typedef {{ width: number; height: number }} StageSize */
@@ -77,6 +79,58 @@ export function boundsFromClientRect(rect) {
     minY: rect.y,
     maxX: rect.x + rect.width,
     maxY: rect.y + rect.height,
+  };
+}
+
+/**
+ * Builds a camera that pans to center `target` while keeping the given zoom.
+ * @param {ContentBounds} target - World-space bounds of the component/terminal.
+ * @param {StageSize} viewport - Stage pixel size.
+ * @param {ContentBounds} content - Full content AABB (for pan clamping).
+ * @param {number} scale - Current zoom level to preserve.
+ */
+export function viewFocusingOnBounds(target, viewport, content, scale) {
+  if (viewport.width <= 0 || viewport.height <= 0) {
+    return INITIAL_VIEW;
+  }
+
+  const nextScale = clampScale(
+    typeof scale === "number" && scale > 0 ? scale : INITIAL_VIEW.scale,
+  );
+  const cx = (target.minX + target.maxX) / 2;
+  const cy = (target.minY + target.maxY) / 2;
+  return clampView(
+    {
+      scale: nextScale,
+      x: viewport.width / 2 - cx * nextScale,
+      y: viewport.height / 2 - cy * nextScale,
+    },
+    viewport,
+    content,
+  );
+}
+
+/**
+ * Cubic ease-out for camera animations (fast start, soft landing).
+ * @param {number} t - Progress in [0, 1].
+ */
+export function easeOutCubic(t) {
+  const u = 1 - Math.min(1, Math.max(0, t));
+  return 1 - u * u * u;
+}
+
+/**
+ * Linearly interpolates two camera views (scale + pan).
+ * @param {ViewState} from - Start camera.
+ * @param {ViewState} to - End camera.
+ * @param {number} t - Progress in [0, 1] (typically already eased).
+ */
+export function lerpView(from, to, t) {
+  const u = Math.min(1, Math.max(0, t));
+  return {
+    scale: from.scale + (to.scale - from.scale) * u,
+    x: from.x + (to.x - from.x) * u,
+    y: from.y + (to.y - from.y) * u,
   };
 }
 

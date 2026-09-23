@@ -7,22 +7,21 @@ import { findTerminal } from "./components/shared.js";
 import { applySwitchVisual } from "./components/switch-shared.js";
 import { createWireManager, wireDragThresholdForEvent } from "./wires.js";
 import { createWireMenu } from "./wire-menu.js";
+import { createMessagesPanel } from "./messages-panel.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
 import { createGrader } from "./grade.js";
 import { buildHintRefCatalog, renderFailHint } from "./hint-refs.js";
 import { resolveCoord } from "./lab-config.js";
 import { pulseHintTarget } from "./pulse-outline.js";
+import { createStageCamera } from "./stage-camera.js";
 import {
   BUTTON_SCALE_BY,
-  INITIAL_VIEW,
   PAN_DRAG_THRESHOLD,
   PINCH_ZOOM_INTENSITY,
   STAGE_DEFAULT_CURSOR,
-  applyViewToStage,
   boundsFromClientRect,
   centerBetween,
-  clampView,
   distanceBetween,
   normalizeWheelDeltas,
   pinchZoomView,
@@ -66,6 +65,8 @@ export function bootCircuitLab(host, config) {
   const zoomInBtn = uiRoot.querySelector("[data-lab-zoom=\"in\"]");
   const zoomResetBtn = uiRoot.querySelector("[data-lab-zoom=\"reset\"]");
   const zoomLabel = uiRoot.querySelector("[data-lab-zoom-label]");
+  const uiShell = uiRoot.querySelector(".circuit-lab-ui") || uiRoot;
+  const messagesPanel = createMessagesPanel(uiShell);
 
   if (titleEl) {
     titleEl.textContent = config.title;
@@ -82,30 +83,12 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Sets the hint text and optional pass/fail styling.
-   * Fail status linkifies known component/load ids; other statuses stay plain text.
+   * Sets the toolbar hint text (mode / test status). Check results use the messages panel.
    * @param {string} text - Message to show.
-   * @param {"pass" | "fail" | ""} [status] - Optional status class.
    */
-  function setHint(text, status) {
+  function setHint(text) {
     hintEl.classList.remove("pass", "fail");
-    if (status === "fail") {
-      renderFailHint(hintEl, text, hintRefCatalog, function (segment) {
-        const map = getComponents();
-        const group = map[segment.componentId];
-        const terminal =
-          segment.terminalId && group
-            ? findTerminal(group, segment.terminalId)
-            : null;
-        pulseHintTarget(group, terminal);
-      });
-      hintEl.classList.add("fail");
-      return;
-    }
     hintEl.textContent = text;
-    if (status) {
-      hintEl.classList.add(status);
-    }
   }
 
   syncToolbarHeight();
@@ -124,15 +107,6 @@ export function bootCircuitLab(host, config) {
   stage.add(wireLayer);
   stage.add(componentLayer);
 
-  /** @type {{ scale: number; x: number; y: number }} */
-  let view = { scale: INITIAL_VIEW.scale, x: INITIAL_VIEW.x, y: INITIAL_VIEW.y };
-  /** @type {{ minX: number; minY: number; maxX: number; maxY: number }} */
-  let contentBounds = {
-    minX: 0,
-    minY: 0,
-    maxX: stage.width(),
-    maxY: stage.height(),
-  };
   let suppressStageClick = false;
   /** @type {{ x: number; y: number }|null} */
   let pinchLastCenter = null;
@@ -149,31 +123,63 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Returns the current stage pixel size.
+   * Repositions the floating wire menu and refreshes the zoom label after camera changes.
+   * @param {{ scale: number }} next - Applied camera view.
    */
-  function viewportSize() {
-    return { width: stage.width(), height: stage.height() };
-  }
-
-  /**
-   * Updates the zoom percent label in the toolbar.
-   */
-  function syncZoomLabel() {
+  function handleCameraViewChange(next) {
     if (zoomLabel) {
-      zoomLabel.textContent = Math.round(view.scale * 100) + "%";
+      zoomLabel.textContent = Math.round(next.scale * 100) + "%";
     }
+    syncWireMenuPosition();
+  }
+
+  const camera = createStageCamera({
+    stage: stage,
+    onViewChange: handleCameraViewChange,
+  });
+
+  /**
+   * Pans the camera to a fail-message ref and pulses its outline at the same time.
+   * @param {{ componentId: string, terminalId?: string }} segment - Hint ref target.
+   */
+  function pulseHintRef(segment) {
+    const map = getComponents();
+    const group = map[segment.componentId];
+    const terminal =
+      segment.terminalId && group
+        ? findTerminal(group, segment.terminalId)
+        : null;
+    const node = terminal && terminal.node ? terminal.node : group;
+    camera.focusNode(node);
+    pulseHintTarget(group, terminal);
   }
 
   /**
-   * Applies a camera view to the stage and refreshes the zoom label.
-   * @param {{ scale: number; x: number; y: number }} next - Camera to apply.
+   * Shows Check pass/fail feedback in the messages panel.
+   * @param {{ pass: boolean, failures: string[] }} result - Grader result.
    */
-  function setView(next) {
-    view = clampView(next, viewportSize(), contentBounds);
-    applyViewToStage(stage, view);
-    syncZoomLabel();
-    syncWireMenuPosition();
-    stage.batchDraw();
+  function showCheckResult(result) {
+    if (result.pass) {
+      messagesPanel.show({
+        variant: "success",
+        title: "Pass",
+        body: config.passMessage,
+      });
+      return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "lab-messages-list";
+    for (let i = 0; i < result.failures.length; i += 1) {
+      const item = document.createElement("li");
+      renderFailHint(item, result.failures[i], hintRefCatalog, pulseHintRef);
+      list.appendChild(item);
+    }
+    messagesPanel.show({
+      variant: "failure",
+      title: "Fail",
+      body: list,
+    });
   }
 
   /**
@@ -185,39 +191,15 @@ export function bootCircuitLab(host, config) {
       skipShadow: true,
     });
     if (rect.width <= 0 || rect.height <= 0) {
-      contentBounds = {
+      camera.setContentBounds({
         minX: 0,
         minY: 0,
         maxX: stage.width(),
         maxY: stage.height(),
-      };
+      });
       return;
     }
-    contentBounds = boundsFromClientRect(rect);
-  }
-
-  /**
-   * Zooms toward the stage center by a fixed step.
-   * @param {number} factor - Multiplier applied to the current scale.
-   */
-  function zoomBy(factor) {
-    const size = viewportSize();
-    setView(
-      zoomAt(
-        view,
-        { x: size.width / 2, y: size.height / 2 },
-        view.scale * factor,
-        size,
-        contentBounds
-      )
-    );
-  }
-
-  /**
-   * Resets stage scale and pan to the default view.
-   */
-  function resetView() {
-    setView(INITIAL_VIEW);
+    camera.setContentBounds(boundsFromClientRect(rect));
   }
 
   const sounds = createSoundPlayer();
@@ -400,7 +382,7 @@ export function bootCircuitLab(host, config) {
     }
     wireMenu.syncPosition(
       function (world) {
-        return worldToPointer(world, view);
+        return worldToPointer(world, camera.getView());
       },
       { width: stageWrap.clientWidth, height: stageWrap.clientHeight }
     );
@@ -430,7 +412,7 @@ export function bootCircuitLab(host, config) {
         wireMenu.setColor(
           wire.colorKey,
           function (world) {
-            return worldToPointer(world, view);
+            return worldToPointer(world, camera.getView());
           },
           { width: stageWrap.clientWidth, height: stageWrap.clientHeight }
         );
@@ -446,7 +428,7 @@ export function bootCircuitLab(host, config) {
       colorKey: wire.colorKey,
       canDelete: true,
       world: worldPos,
-      screen: worldToPointer(worldPos, view),
+      screen: worldToPointer(worldPos, camera.getView()),
       viewport: {
         width: stageWrap.clientWidth,
         height: stageWrap.clientHeight,
@@ -480,7 +462,7 @@ export function bootCircuitLab(host, config) {
     findTerminalFromNode: findTerminalFromNode,
     listTerminals: listTerminals,
     getView: function () {
-      return view;
+      return camera.getView();
     },
     onHistoryChange: syncUndoButton,
     onChange: handleWiresChanged,
@@ -572,7 +554,7 @@ export function bootCircuitLab(host, config) {
       bindComponent(group);
     }
     syncContentBounds();
-    setView(view);
+    camera.setView(camera.getView());
   }
 
   /**
@@ -660,6 +642,7 @@ export function bootCircuitLab(host, config) {
     testingSequence = false;
     runTestSequence.activeId = null;
     btnTest.disabled = false;
+    messagesPanel.dismiss();
 
     if (mode === "lab") {
       persistLabState();
@@ -690,7 +673,7 @@ export function bootCircuitLab(host, config) {
 
     group.on("dragend", function () {
       syncContentBounds();
-      setView(view);
+      camera.setView(camera.getView());
     });
 
     if (group.terminals) {
@@ -774,7 +757,7 @@ export function bootCircuitLab(host, config) {
         stage.container().style.cursor = "crosshair";
       }
 
-      const world = pointerToWorld(pos, view);
+      const world = pointerToWorld(pos, camera.getView());
       wireManager.setDraftDrag(terminal, world);
       wireManager.setSnapHighlight(wireManager.terminalAtPointer(stage, terminal));
     }
@@ -1056,11 +1039,7 @@ export function bootCircuitLab(host, config) {
       return;
     }
     const result = grader.grade();
-    if (result.pass) {
-      setHint(config.passMessage, "pass");
-    } else {
-      setHint("Fail — " + result.failures.join(" "), "fail");
-    }
+    showCheckResult(result);
     host.dispatchEvent(
       new CustomEvent("andy:lab-check", {
         bubbles: true,
@@ -1095,16 +1074,18 @@ export function bootCircuitLab(host, config) {
 
   if (zoomOutBtn) {
     zoomOutBtn.addEventListener("click", function () {
-      zoomBy(1 / BUTTON_SCALE_BY);
+      camera.zoomBy(1 / BUTTON_SCALE_BY);
     });
   }
   if (zoomInBtn) {
     zoomInBtn.addEventListener("click", function () {
-      zoomBy(BUTTON_SCALE_BY);
+      camera.zoomBy(BUTTON_SCALE_BY);
     });
   }
   if (zoomResetBtn) {
-    zoomResetBtn.addEventListener("click", resetView);
+    zoomResetBtn.addEventListener("click", function () {
+      camera.resetView();
+    });
   }
 
   /**
@@ -1113,7 +1094,8 @@ export function bootCircuitLab(host, config) {
    */
   function handleWheel(e) {
     e.evt.preventDefault();
-    const size = viewportSize();
+    const view = camera.getView();
+    const size = camera.viewportSize();
     const deltas = normalizeWheelDeltas(e.evt, size);
 
     if (e.evt.ctrlKey || e.evt.metaKey) {
@@ -1121,19 +1103,19 @@ export function bootCircuitLab(host, config) {
       if (!pointer) {
         return;
       }
-      setView(
+      camera.setView(
         zoomAt(
           view,
           pointer,
           view.scale * Math.exp(-deltas.deltaY * PINCH_ZOOM_INTENSITY),
           size,
-          contentBounds
+          camera.getContentBounds()
         )
       );
       return;
     }
 
-    setView({
+    camera.setView({
       scale: view.scale,
       x: view.x - deltas.deltaX,
       y: view.y - deltas.deltaY,
@@ -1155,7 +1137,7 @@ export function bootCircuitLab(host, config) {
       return;
     }
     const origin = { x: startPointer.x, y: startPointer.y };
-    const startView = { scale: view.scale, x: view.x, y: view.y };
+    const startView = { ...camera.getView() };
     let panning = false;
 
     /**
@@ -1183,7 +1165,7 @@ export function bootCircuitLab(host, config) {
         suppressStageClick = true;
       }
 
-      setView({
+      camera.setView({
         scale: startView.scale,
         x: startView.x + dx,
         y: startView.y + dy,
@@ -1235,15 +1217,15 @@ export function bootCircuitLab(host, config) {
       return;
     }
 
-    setView(
+    camera.setView(
       pinchZoomView(
-        view,
+        camera.getView(),
         pinchLastCenter,
         pinchLastDist,
         newCenter,
         dist,
-        viewportSize(),
-        contentBounds
+        camera.viewportSize(),
+        camera.getContentBounds()
       )
     );
     pinchLastCenter = newCenter;
@@ -1315,7 +1297,7 @@ export function bootCircuitLab(host, config) {
     stage.width(host.clientWidth || window.innerWidth);
     stage.height(Math.max(200, (host.clientHeight || window.innerHeight) - toolbarHeight));
     syncContentBounds();
-    setView(view);
+    camera.setView(camera.getView());
     wireManager.updateWirePositions();
     stage.batchDraw();
   }
@@ -1324,7 +1306,7 @@ export function bootCircuitLab(host, config) {
 
   syncModeButtons();
   setWireColor(config.defaultWireColor);
-  syncZoomLabel();
+  handleCameraViewChange(camera.getView());
   ensureComponents();
   showDemoCircuit();
 }

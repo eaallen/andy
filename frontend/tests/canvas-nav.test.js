@@ -12,10 +12,13 @@ import {
   clampScale,
   clampView,
   distanceBetween,
+  easeOutCubic,
+  lerpView,
   normalizeWheelDeltas,
   pinchZoomView,
   pointerToWorld,
   stagePointsFromTouches,
+  viewFocusingOnBounds,
   worldToPointer,
   zoomAt,
 } from "../js/canvas-nav.js";
@@ -107,6 +110,63 @@ describe("boundsFromClientRect", () => {
       maxX: 110,
       maxY: 70,
     });
+  });
+});
+
+describe("viewFocusingOnBounds", () => {
+  it("pans to center the target without changing scale", () => {
+    const target = { minX: 100, minY: 50, maxX: 300, maxY: 200 };
+    const next = viewFocusingOnBounds(target, viewport, content, 1.25);
+    expect(next.scale).toBe(1.25);
+    const screenCenter = worldToPointer({ x: 200, y: 125 }, next);
+    expect(screenCenter.x).toBeCloseTo(viewport.width / 2, 5);
+    expect(screenCenter.y).toBeCloseTo(viewport.height / 2, 5);
+  });
+
+  it("preserves the current scale when centering a far-away target", () => {
+    const target = { minX: 900, minY: 700, maxX: 1000, maxY: 800 };
+    const wideContent = { minX: 0, minY: 0, maxX: 1200, maxY: 1000 };
+    const next = viewFocusingOnBounds(target, viewport, wideContent, 0.8);
+    expect(next.scale).toBe(0.8);
+  });
+
+  it("falls back to unit scale when scale is missing or invalid", () => {
+    const target = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+    expect(viewFocusingOnBounds(target, viewport, content).scale).toBe(1);
+    expect(viewFocusingOnBounds(target, viewport, content, 0).scale).toBe(1);
+    expect(viewFocusingOnBounds(target, viewport, content, -2).scale).toBe(1);
+  });
+
+  it("returns the initial view for an empty viewport", () => {
+    const target = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+    expect(
+      viewFocusingOnBounds(target, { width: 0, height: 600 }, content, 1.5)
+    ).toEqual(INITIAL_VIEW);
+  });
+});
+
+describe("easeOutCubic and lerpView", () => {
+  it("eases from 0 to 1 with a soft landing", () => {
+    expect(easeOutCubic(0)).toBe(0);
+    expect(easeOutCubic(1)).toBe(1);
+    expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
+  });
+
+  it("clamps progress outside [0, 1]", () => {
+    expect(easeOutCubic(-1)).toBe(0);
+    expect(easeOutCubic(2)).toBe(1);
+    expect(
+      lerpView({ scale: 1, x: 0, y: 0 }, { scale: 2, x: 10, y: 20 }, -1)
+    ).toEqual({ scale: 1, x: 0, y: 0 });
+    expect(
+      lerpView({ scale: 1, x: 0, y: 0 }, { scale: 2, x: 10, y: 20 }, 2)
+    ).toEqual({ scale: 2, x: 10, y: 20 });
+  });
+
+  it("interpolates scale and pan", () => {
+    expect(
+      lerpView({ scale: 1, x: 0, y: 0 }, { scale: 2, x: 100, y: -50 }, 0.5)
+    ).toEqual({ scale: 1.5, x: 50, y: -25 });
   });
 });
 

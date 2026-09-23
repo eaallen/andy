@@ -25,6 +25,7 @@ export const CIRCUIT_LAB_CSS = `
 }
 
 .circuit-lab-ui {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -356,6 +357,142 @@ button.wire-menu-swatch:hover {
 .wire-menu-swatch--selected {
   outline: 2px solid #18181b;
   outline-offset: 1px;
+}
+
+.lab-messages-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(22rem, calc(100% - 24px));
+  max-height: 40%;
+  padding: 10px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 8px 24px rgba(24, 24, 27, 0.16),
+    0 1px 3px rgba(24, 24, 27, 0.08);
+  pointer-events: auto;
+}
+
+.lab-messages-panel[hidden] {
+  display: none;
+}
+
+.lab-messages-panel--success {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.lab-messages-panel--failure {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.lab-messages-panel--info {
+  border-color: #d4d4d8;
+  background: #ffffff;
+}
+
+.lab-messages-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.lab-messages-header.is-dragging {
+  cursor: grabbing;
+}
+
+.lab-messages-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #18181b;
+}
+
+.lab-messages-panel--success .lab-messages-title {
+  color: #15803d;
+}
+
+.lab-messages-panel--failure .lab-messages-title {
+  color: #b91c1c;
+}
+
+.lab-messages-panel--minimized {
+  max-height: none;
+  gap: 0;
+}
+
+.lab-messages-panel--minimized .lab-messages-body {
+  display: none;
+}
+
+.lab-messages-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -4px -6px -4px 0;
+}
+
+.lab-messages-minimize,
+.lab-messages-dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lab-messages-minimize:hover,
+.lab-messages-dismiss:hover {
+  background: rgba(24, 24, 27, 0.06);
+  color: #3f3f46;
+}
+
+.lab-messages-minimize:focus-visible,
+.lab-messages-dismiss:focus-visible {
+  outline: 2px solid #71717a;
+  outline-offset: 1px;
+}
+
+.lab-messages-body {
+  overflow: auto;
+  min-height: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #3f3f46;
+}
+
+.lab-messages-body:empty {
+  display: none;
+}
+
+.lab-messages-list {
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+}
+
+.lab-messages-list > li + li {
+  margin-top: 0.45rem;
 }
 
 .circuit-lab-error {

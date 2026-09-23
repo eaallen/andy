@@ -11,6 +11,12 @@ const testConfig = {
   environment: "jsdom",
   setupFiles: ["tests/setup.js"],
   include: ["tests/**/*.test.js"],
+  coverage: {
+    provider: "v8",
+    reporter: ["text", "html", "lcov"],
+    include: ["js/**/*.js"],
+    reportsDirectory: "./coverage",
+  },
 };
 
 /**

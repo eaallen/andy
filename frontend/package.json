@@ -11,7 +11,8 @@
     "publish": "npm run build:lib && cp dist/andy.js /Users/eli/availabooks/tools/api/andy.js",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,7 @@
     "konva": "^10.3.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
     "jsdom": "^29.1.1",
     "vite": "^8.1.4",
     "vitest": "^4.1.10",

@@ -65,6 +65,7 @@ Routes served by the Worker:
 
 ```bash
 npm test
+npm run test:coverage    # frontend Vitest + v8 coverage (text + coverage/)
 npm run typecheck
 npm run deploy           # vite build + wrangler deploy
 ```
