@@ -3,6 +3,7 @@ import { COMPONENT_TYPES, TERMINAL_ROLES } from "./constants.js";
 import {
   TERMINAL_OUTSET,
   addComponentShell,
+  addMeasurementReadout,
   addTerminal,
   initComponent,
   nextComponentInstanceId,
@@ -89,6 +90,10 @@ export function makeLamp(label, x, y) {
   group.lampBulb = bulb;
   group.lampFilament = filament;
   group.isLit = false;
+  group.setEnergized = function (live) {
+    applyLampVisual(group, { lit: live });
+  };
+  addMeasurementReadout(group, 6, 76, shell.width - 12);
 
   const terminalY = shell.height + TERMINAL_OUTSET;
   const leftX = shell.width / 3;

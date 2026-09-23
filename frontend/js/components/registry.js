@@ -5,6 +5,7 @@ import { makeGfci } from "./gfci.js";
 import { makeLamp } from "./lamp.js";
 import { makePower } from "./power.js";
 import { makeReceptacle } from "./receptacle.js";
+import { makeResistor } from "./resistor.js";
 import { makeSwitch } from "./switch.js";
 import { makeTerminalBlock } from "./terminal-block.js";
 import { makeThreeWay } from "./three-way.js";
@@ -58,11 +59,16 @@ export const COMPONENT_REGISTRY = {
   gfci: function (entry) {
     return makeGfci(entry.label || entry.id, entry.x, entry.y);
   },
+  resistor: function (entry) {
+    return makeResistor(entry.label || entry.id, entry.x, entry.y, {
+      ohms: entry.ohms,
+    });
+  },
 };
 
 /**
  * Creates a single component instance from a normalized YAML component entry.
- * @param {{ id: string, type: string, label?: string, x: number, y: number, legs?: number, kind?: "ac"|"dc" }} entry - Resolved component.
+ * @param {{ id: string, type: string, label?: string, x: number, y: number, legs?: number, kind?: "ac"|"dc", ohms?: number }} entry - Resolved component.
  */
 export function makeComponentFromEntry(entry) {
   const type = entry.type;
@@ -96,6 +102,7 @@ export function createLayoutFromConfig(config, stageWidth, stageHeight, resolveC
       label: entry.label,
       legs: entry.legs,
       kind: entry.kind,
+      ohms: entry.ohms,
       x: resolveCoord(entry.x, "x", stage),
       y: resolveCoord(entry.y, "y", stage),
     };

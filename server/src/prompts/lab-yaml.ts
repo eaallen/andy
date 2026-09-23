@@ -38,9 +38,15 @@ export const COMPONENT_CATALOG = `
 
 ### lamp
 - Terminals: hot, n
+- Default resistance 144 Ω when used as a conductive simulation load.
+
+### resistor
+- Terminals: a, b
+- Optional field: ohms (positive number, default 100). Pair with a simulation load spanning a/b.
 
 ### receptacle
 - Terminals: hot, n, g
+- Open-circuit probe in simulation (voltage across terminals; no phantom current).
 
 ### gfci
 - Terminals: line-hot, line-n, line-g, load-hot, load-n, load-g
@@ -53,6 +59,7 @@ export const LAB_YAML_SCHEMA_RULES = `
 Top-level fields:
 - title: string (required)
 - margin: number (optional, default 40)
+- measurements: boolean (optional, default true) — start with canvas V/I/R labels on
 - passMessage: string (optional)
 - hints.demo / hints.lab: strings (optional)
 - defaultWireColor: color key (optional, default black) — starting color for new lab wires
@@ -72,6 +79,7 @@ Each entry:
        offsets: center-55, right-140, bottom-128, center+64
   legs: only for power
   kind: only for power (ac|dc, default ac)
+  ohms: only for resistor (positive number, default 100)
 
 ### Wire endpoints
 Always "componentId.terminalId" (e.g. power.l1, switch1.com, lamp.hot).
@@ -94,11 +102,14 @@ demo.wires item shapes:
 supply:
   hot: power.l1   # or [power.l1, power.l2] for multi-wire
   return: power.n
+  volts: 120      # optional; default 120 (use 24 for doorbell transformer secondary)
 loads:
   - id: lamp                 # must match a component id used in grading.whenClosed.energize
     requireHot: lamp.hot
     signal: lamp.n
+    ohms: 144                # optional; defaults by type (lamp 144, chime 24, resistor from component)
     feedback: { type: light }  # or { type: sound, profile: dingDong|buzz }
+# Conductive loads pass current (series/parallel Ohm’s law). Receptacles are open probes.
 
 ### grading
 required: [component ids that must exist]

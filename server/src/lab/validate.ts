@@ -23,6 +23,7 @@ export type LabWire = {
 export type LabConfig = {
   title: string;
   margin?: number;
+  measurements?: boolean;
   passMessage?: string;
   hints?: { demo?: string; lab?: string };
   components: LabComponent[];

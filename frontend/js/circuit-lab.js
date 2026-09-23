@@ -27,6 +27,10 @@ function createLabUiShell() {
     '<button type="button" class="toolbar-btn lab-btn-check" data-lab-action="check" disabled>Check</button>' +
     "</div>" +
     '<div class="toolbar-divider" aria-hidden="true"></div>' +
+    '<div class="toolbar-group" role="group" aria-label="Measurements">' +
+    '<button type="button" class="toolbar-btn active" data-lab-action="measurements" aria-pressed="true" title="Show volts, amps, and ohms on the canvas">Measurements</button>' +
+    "</div>" +
+    '<div class="toolbar-divider" aria-hidden="true"></div>' +
     '<div class="toolbar-group toolbar-zoom" data-lab-zoom role="group" aria-label="Zoom controls">' +
     '<button type="button" class="toolbar-btn" data-lab-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>' +
     '<span class="toolbar-zoom-label" data-lab-zoom-label>100%</span>' +

@@ -90,6 +90,7 @@ export function createWireManager(layer, options) {
   const onChange = opts.onChange;
   const onHistoryChange = opts.onHistoryChange;
   const onSelectionChange = opts.onSelectionChange;
+  const onLayoutChange = opts.onLayoutChange;
   const resolveTerminal = opts.resolveTerminal;
   const findTerminalFromNode = opts.findTerminalFromNode;
   const listTerminals = opts.listTerminals;
@@ -114,6 +115,15 @@ export function createWireManager(layer, options) {
   function notifyChange() {
     if (typeof onChange === "function") {
       onChange();
+    }
+  }
+
+  /**
+   * Notifies listeners that wire geometry moved without topology change.
+   */
+  function notifyLayoutChange() {
+    if (typeof onLayoutChange === "function") {
+      onLayoutChange();
     }
   }
 
@@ -683,6 +693,7 @@ export function createWireManager(layer, options) {
           })(i);
         }
         notifyChange();
+        notifyLayoutChange();
         layer.batchDraw();
         return;
       }
@@ -696,6 +707,7 @@ export function createWireManager(layer, options) {
         wire.handles[bendIndex].position(wire.bends[bendIndex]);
       }
       layer.batchDraw();
+      notifyLayoutChange();
     }
 
     /**
@@ -755,6 +767,7 @@ export function createWireManager(layer, options) {
           wire.bends[bendIndex].y = handle.y();
           refreshWireGeometry(wire);
           layer.batchDraw();
+          notifyLayoutChange();
         });
 
         handle.on("dragend", function () {
@@ -889,6 +902,7 @@ export function createWireManager(layer, options) {
       }
     }
     layer.batchDraw();
+    notifyLayoutChange();
   }
 
   /**

@@ -1,5 +1,6 @@
 title: GFCI Downstream Protection Lab
 margin: 40
+measurements: false
 passMessage: Pass — power feeds GFCI LINE; the downstream receptacle is protected on LOAD.
 hints:
   demo: >-

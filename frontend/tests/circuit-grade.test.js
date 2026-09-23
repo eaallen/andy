@@ -86,12 +86,14 @@ function doorbellSimulation() {
         id: "front",
         requireHot: { component: "chime", terminal: "trans" },
         signal: { component: "chime", terminal: "front" },
+        ohms: 24,
         feedback: { type: "sound", profile: "dingDong" },
       },
       {
         id: "rear",
         requireHot: { component: "chime", terminal: "trans" },
         signal: { component: "chime", terminal: "rear" },
+        ohms: 24,
         feedback: { type: "sound", profile: "buzz" },
       },
     ],
@@ -289,6 +291,7 @@ describe("createCircuitSimulator", () => {
           id: "lamp",
           requireHot: { component: "lamp", terminal: "hot" },
           signal: { component: "lamp", terminal: "n" },
+          ohms: 144,
           feedback: { type: "light" },
         },
       ],
@@ -343,6 +346,7 @@ describe("createCircuitSimulator", () => {
           id: "lamp",
           requireHot: { component: "lamp", terminal: "hot" },
           signal: { component: "lamp", terminal: "n" },
+          ohms: 144,
           feedback: { type: "light" },
         },
       ],
@@ -385,6 +389,7 @@ describe("createCircuitSimulator", () => {
           id: "lamp",
           requireHot: { component: "lamp", terminal: "hot" },
           signal: { component: "lamp", terminal: "n" },
+          ohms: 144,
           feedback: { type: "light" },
         },
       ],
@@ -426,6 +431,7 @@ describe("createCircuitSimulator", () => {
           id: "lamp",
           requireHot: { component: "lamp", terminal: "hot" },
           signal: { component: "lamp", terminal: "n" },
+          ohms: 144,
           feedback: { type: "light" },
         },
       ],
@@ -590,6 +596,7 @@ describe("createGrader", () => {
           id: "lamp",
           requireHot: { component: "lamp", terminal: "hot" },
           signal: { component: "lamp", terminal: "n" },
+          ohms: 144,
           feedback: { type: "light" },
         },
       ],
@@ -729,6 +736,9 @@ function createFixtureFromLabConfig(config) {
       isSwitch: isSwitch,
       switchKind: switchKinds[entry.type],
     });
+    if (entry.ohms != null) {
+      components[entry.id].ohms = entry.ohms;
+    }
   }
 
   const wires = config.demoWires.map(function (wire) {
@@ -905,6 +915,89 @@ describe("Utah exam catalog labs", () => {
       lampA: true,
       lampB: true,
     });
+    expect(gradeDemoWiring(config).pass).toBe(true);
+  });
+
+  it("energizes both lamps when daisy-chained in series", () => {
+    const supply = makeComponent("power", "power", [
+      { id: "l1", role: TERMINAL_ROLES.L1 },
+      { id: "n", role: TERMINAL_ROLES.NEUTRAL },
+    ]);
+    const lamp1 = makeComponent("lamp1", "lamp", [
+      { id: "hot", role: TERMINAL_ROLES.LOAD_HOT },
+      { id: "n", role: TERMINAL_ROLES.LOAD_NEUTRAL },
+    ]);
+    const lamp2 = makeComponent("lamp2", "lamp", [
+      { id: "hot", role: TERMINAL_ROLES.LOAD_HOT },
+      { id: "n", role: TERMINAL_ROLES.LOAD_NEUTRAL },
+    ]);
+    const components = { power: supply, lamp1: lamp1, lamp2: lamp2 };
+    const wires = [
+      { from: term(supply, "l1"), to: term(lamp1, "hot") },
+      { from: term(lamp1, "n"), to: term(lamp2, "hot") },
+      { from: term(lamp2, "n"), to: term(supply, "n") },
+    ];
+    const simulator = createCircuitSimulator(
+      function () {
+        return wires;
+      },
+      function () {
+        return components;
+      },
+      {
+        supply: {
+          hot: { component: "power", terminal: "l1" },
+          return: { component: "power", terminal: "n" },
+          volts: 120,
+        },
+        loads: [
+          {
+            id: "lamp1",
+            requireHot: { component: "lamp1", terminal: "hot" },
+            signal: { component: "lamp1", terminal: "n" },
+            ohms: 144,
+          },
+          {
+            id: "lamp2",
+            requireHot: { component: "lamp2", terminal: "hot" },
+            signal: { component: "lamp2", terminal: "n" },
+            ohms: 144,
+          },
+        ],
+        switches: [],
+      }
+    );
+
+    const result = simulator.simulate([]);
+    expect(result.energized).toEqual({ lamp1: true, lamp2: true });
+    expect(Math.abs(result.loadCurrents.lamp1)).toBeCloseTo(
+      Math.abs(result.loadCurrents.lamp2),
+      5
+    );
+    expect(Math.abs(result.loadVoltages.lamp1)).toBeCloseTo(60, 0);
+    expect(Math.abs(result.loadVoltages.lamp2)).toBeCloseTo(60, 0);
+  });
+
+  it("passes Check on series-parallel-resistors demo wiring", () => {
+    const config = loadLab("series-parallel-resistors.yaml");
+    const fixture = createFixtureFromLabConfig(config);
+    const simulator = createCircuitSimulator(
+      function () {
+        return fixture.wires;
+      },
+      function () {
+        return fixture.components;
+      },
+      config.simulation
+    );
+    const result = simulator.simulate([]);
+    expect(result.energized).toEqual({ r1: true, r2: true, r3: true });
+    expect(Math.abs(result.loadCurrents.r1)).toBeCloseTo(
+      Math.abs(result.loadCurrents.r2),
+      4
+    );
+    expect(Math.abs(result.loadVoltages.r1)).toBeCloseTo(60, 0);
+    expect(Math.abs(result.loadVoltages.r3)).toBeCloseTo(120, 0);
     expect(gradeDemoWiring(config).pass).toBe(true);
   });
 });

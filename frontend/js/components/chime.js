@@ -3,6 +3,7 @@ import { COMPONENT_TYPES, TERMINAL_ROLES } from "./constants.js";
 import {
   TERMINAL_OUTSET,
   addComponentShell,
+  addMeasurementReadout,
   addTerminal,
   initComponent,
   nextComponentInstanceId,
@@ -16,7 +17,7 @@ import {
  */
 export function makeChime(x, y) {
   const group = new Konva.Group({ x: x, y: y });
-  const shell = addComponentShell(group, 170, 82, "Chime");
+  const shell = addComponentShell(group, 170, 96, "Chime");
 
   group.add(
     new Konva.Rect({
@@ -43,6 +44,7 @@ export function makeChime(x, y) {
       listening: false,
     })
   );
+  addMeasurementReadout(group, 8, 72, shell.width - 16);
 
   const terminalY = shell.height + TERMINAL_OUTSET;
   const spacing = shell.width / 4;

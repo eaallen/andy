@@ -13,6 +13,7 @@ export const COMPONENT_TYPES = {
   RECEPTACLE: "receptacle",
   GFCI: "gfci",
   TERMINAL_BLOCK: "terminalBlock",
+  RESISTOR: "resistor",
 };
 
 /**
