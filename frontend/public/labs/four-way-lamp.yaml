@@ -56,25 +56,25 @@ grading:
   continuity:
     - from: power.l1
       to: sw1.com
-      fail: "Power L1 is not wired to the first 3-way COM."
+      fail: "[power] L1 is not wired to the first 3-way [sw1] COM."
     - from: sw1.t1
       to: sw4.a1
-      fail: "First 3-way T1 is not wired to 4-way A1."
+      fail: "First 3-way [sw1] T1 is not wired to 4-way [sw4] A1."
     - from: sw1.t2
       to: sw4.a2
-      fail: "First 3-way T2 is not wired to 4-way A2."
+      fail: "First 3-way [sw1] T2 is not wired to 4-way [sw4] A2."
     - from: sw4.b1
       to: sw2.t1
-      fail: "4-way B1 is not wired to the second 3-way T1."
+      fail: "4-way [sw4] B1 is not wired to the second 3-way [sw2] T1."
     - from: sw4.b2
       to: sw2.t2
-      fail: "4-way B2 is not wired to the second 3-way T2."
+      fail: "4-way [sw4] B2 is not wired to the second 3-way [sw2] T2."
     - from: sw2.com
       to: lamp.hot
-      fail: "Second 3-way COM is not wired to the lamp hot."
+      fail: "Second 3-way [sw2] COM is not wired to the [lamp] hot."
     - from: lamp.n
       to: power.n
-      fail: "Lamp neutral is not wired to power neutral."
+      fail: "[lamp] neutral is not wired to [power] neutral."
   whenClosed:
     # Defaults: both 3-ways on T1, 4-way straight → on
     - closed: []

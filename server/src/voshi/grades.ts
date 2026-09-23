@@ -1,37 +1,34 @@
 import type { VoshiSession } from "@/voshi/session.js";
-import { VOSHI_API_BASE } from "@/voshi/constants.js";
 import { VoshiError } from "@/voshi/errors.js";
 
-export type VoshiGradeResult = {
-  grade_id: string;
-  launch_id: string;
+export type VoshiGradeAttempt = {
+  id?: string;
+  status: "success" | "failed";
   score: number;
-  sync_status: "synced" | "failed" | "pending";
-  sync_error: string | null;
-  submitted_at: string;
-  synced_at: string | null;
+  data?: { error?: string | null };
 };
 
 /**
  * Returns whether this session may send a grade to the LMS.
+ * A grade URL plus a student group is enough; staff-only launches are not.
  * @param session - Current Voshi session.
  */
 export function canSubmitGrade(session: VoshiSession): boolean {
+  const groups = session.groups ?? [];
   return (
-    Boolean(session.launchId) &&
-    session.role === "student" &&
-    session.gradePassback &&
-    session.locationType === "assessment"
+    groups.includes("student") &&
+    Boolean(session.gradeSubmit) &&
+    Boolean(session.apiToken)
   );
 }
 
 /**
- * Throws unless Voshi reports the score reached the LMS gradebook.
- * HTTP 200 from Voshi is not enough — sync is reported in-band.
+ * Throws unless Voshi reports the attempt reached the LMS gradebook.
+ * @param grade - Parsed grade attempt, if any.
  */
 export function requireSyncedGrade(
-  grade: VoshiGradeResult | null | undefined,
-): VoshiGradeResult {
+  grade: VoshiGradeAttempt | null | undefined,
+): VoshiGradeAttempt {
   if (!grade) {
     throw new VoshiError(
       "Grade did not sync to the LMS.",
@@ -39,31 +36,14 @@ export function requireSyncedGrade(
       "voshi_grade_failed",
     );
   }
-
-  switch (grade.sync_status) {
-    case "synced":
-      return grade;
-    case "failed":
-      throw new VoshiError(
-        grade.sync_error || "Grade did not sync to the LMS.",
-        503,
-        "voshi_grade_failed",
-      );
-    case "pending":
-      throw new VoshiError(
-        "Grade is still syncing to the LMS.",
-        503,
-        "voshi_grade_failed",
-      );
-    default: {
-      const _exhaustive: never = grade.sync_status;
-      throw new VoshiError(
-        `Grade did not sync to the LMS (${String(_exhaustive)}).`,
-        503,
-        "voshi_grade_failed",
-      );
-    }
+  if (grade.status === "success") {
+    return grade;
   }
+  throw new VoshiError(
+    grade.data?.error || "Grade did not sync to the LMS.",
+    503,
+    "voshi_grade_failed",
+  );
 }
 
 /**
@@ -81,63 +61,106 @@ export function normalizeGradeScore(score: unknown): number {
 }
 
 /**
- * POSTs a grade to Voshi. Auth is the app API key, not the launch api.token.
- * @param options - API key, launch id, score fraction, optional comment and fetch.
+ * Narrows a Voshi grade response body into a typed attempt.
+ * @param body - Parsed JSON body.
+ */
+function parseGradeAttempt(body: unknown): VoshiGradeAttempt {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new VoshiError(
+      "Grade did not sync to the LMS.",
+      503,
+      "voshi_grade_failed",
+    );
+  }
+  const raw = body as Record<string, unknown>;
+  if (raw.status !== "success" && raw.status !== "failed") {
+    throw new VoshiError(
+      "Grade did not sync to the LMS.",
+      503,
+      "voshi_grade_failed",
+    );
+  }
+  if (typeof raw.score !== "number" || !Number.isFinite(raw.score)) {
+    throw new VoshiError(
+      "Grade did not sync to the LMS.",
+      503,
+      "voshi_grade_failed",
+    );
+  }
+  const attempt: VoshiGradeAttempt = {
+    status: raw.status,
+    score: raw.score,
+  };
+  if (typeof raw.id === "string") {
+    attempt.id = raw.id;
+  }
+  if (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)) {
+    const data = raw.data as Record<string, unknown>;
+    attempt.data = {
+      error:
+        typeof data.error === "string" || data.error === null
+          ? data.error
+          : undefined,
+    };
+  }
+  return attempt;
+}
+
+/**
+ * POSTs a score to the launch's grade.submit URL using the launch api token.
+ * @param options - Submit URL, api token, score fraction, optional comment and fetch.
  */
 export async function submitVoshiGrade(options: {
-  apiKey: string;
-  launchId: string;
+  submitUrl: string;
+  apiToken: string;
   score: number;
   comment?: string;
   fetchImpl?: typeof fetch;
-}): Promise<VoshiGradeResult> {
-  if (!options.apiKey) {
+}): Promise<VoshiGradeAttempt> {
+  if (!options.submitUrl) {
     throw new VoshiError(
-      "VOSHI_API_KEY is required to send grades.",
+      "This launch cannot send a grade.",
+      422,
+      "grade_unavailable",
+    );
+  }
+  if (!options.apiToken) {
+    throw new VoshiError(
+      "This launch has no api token to send a grade.",
       503,
-      "missing_voshi_api_key",
+      "missing_api_token",
     );
   }
 
   const score = normalizeGradeScore(options.score);
   const fetchImpl = options.fetchImpl ?? fetch;
-  const response = await fetchImpl(`${VOSHI_API_BASE}/grades`, {
+  const response = await fetchImpl(options.submitUrl, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${options.apiKey}`,
+      Authorization: `Bearer ${options.apiToken}`,
       "Content-Type": "application/json",
       Accept: "application/json",
     },
     body: JSON.stringify({
-      launch_id: options.launchId,
       score,
       ...(options.comment ? { comment: options.comment } : {}),
     }),
   });
 
   const body = (await response.json().catch(() => null)) as
-    | VoshiGradeResult
-    | { message?: string; error?: string }
+    | Record<string, unknown>
     | null;
 
   if (response.status === 422) {
     const message =
-      (body && "message" in body && body.message) ||
+      (body && typeof body.message === "string" && body.message) ||
       "Voshi rejected the grade.";
     throw new VoshiError(message, 422, "voshi_grade_rejected");
   }
 
-  if (response.status === 404) {
-    throw new VoshiError(
-      "Unknown launch_id.",
-      404,
-      "unknown_launch",
-    );
-  }
-
   if (!response.ok) {
     const message =
-      (body && "message" in body && body.message) ||
+      (body && typeof body.message === "string" && body.message) ||
       `Voshi grade request failed (${response.status}).`;
     throw new VoshiError(
       message,
@@ -146,5 +169,5 @@ export async function submitVoshiGrade(options: {
     );
   }
 
-  return body as VoshiGradeResult;
+  return parseGradeAttempt(body);
 }

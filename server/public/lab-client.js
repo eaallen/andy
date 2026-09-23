@@ -4,42 +4,32 @@
 (function () {
   const DRAFT_STORAGE_KEY = "andy:draftLabYaml";
 
+  /**
+   * Reads the graded-lab catalog embedded by the lab page.
+   */
+  function readLabCatalog() {
+    const el = document.getElementById("andy-lab-catalog");
+    if (!el || !el.textContent) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(el.textContent);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** @type {{ id: string; src: string | null; label: string }[]} */
-  const LABS = [
-    { id: "doorbell", src: "/labs/doorbell.yaml", label: "Doorbell Demo" },
-    {
-      id: "single-pole-lamp",
-      src: "/labs/single-pole-lamp.yaml",
-      label: "Single-Pole Lamp",
-    },
-    {
-      id: "three-way-lamp",
-      src: "/labs/three-way-lamp.yaml",
-      label: "Three-Way Lamp",
-    },
-    {
-      id: "four-way-lamp",
-      src: "/labs/four-way-lamp.yaml",
-      label: "Four-Way Lamp",
-    },
-    {
-      id: "gfci-downstream",
-      src: "/labs/gfci-downstream.yaml",
-      label: "GFCI Downstream",
-    },
-    {
-      id: "multi-wire-branch",
-      src: "/labs/multi-wire-branch.yaml",
-      label: "Multi-Wire Branch",
-    },
+  const LABS = readLabCatalog().concat([
     { id: "draft", src: null, label: "AI Draft (from image)" },
-  ];
+  ]);
 
   /**
    * Reads LMS launch context embedded by the lab page (absent on public /lab).
-   * 
-   * Note: Reading the lab context directly from the dom seems like a bad idea to me. 
-   * I would think there is another context we can use to make this work better. 
+   *
+   * Note: Reading the lab context directly from the dom seems like a bad idea to me.
+   * I would think there is another context we can use to make this work better.
    */
   function readLabContext() {
     const el = document.getElementById("andy-lab-context");

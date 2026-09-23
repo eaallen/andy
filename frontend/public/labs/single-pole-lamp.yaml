@@ -47,17 +47,17 @@ grading:
   continuity:
     - from: power.l1
       to: switch1.com
-      fail: "Power L1 is not wired to the switch COM."
+      fail: "[power] L1 is not wired to the [switch1] COM."
     - from: switch1.no
       to: lamp.hot
-      fail: "Switch NO is not wired to the lamp hot."
+      fail: "[switch1] NO is not wired to the [lamp] hot."
     - from: lamp.n
       to: power.n
-      fail: "Lamp neutral is not wired to power neutral."
+      fail: "[lamp] neutral is not wired to [power] neutral."
   polarity:
     - load: lamp
       closed: [switch1]
-      fail: "Lamp hot and neutral are reversed."
+      fail: "[lamp] hot and neutral are reversed."
   whenClosed:
     - switch: switch1
       energize: [lamp]

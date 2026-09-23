@@ -6,18 +6,10 @@ import {
 } from "@/voshi/constants.js";
 import { VoshiError } from "@/voshi/errors.js";
 import { sanitizeLabId } from "@/voshi/route.js";
-import type { VoshiLocationType, VoshiUserRole } from "@/voshi/claims.js";
 
-export type VoshiSession = {
-  launchId: string;
-  userId: string;
-  role: VoshiUserRole;
-  courseId: string;
-  locationId: string;
-  locationType: VoshiLocationType;
-  locationLabel: string;
+/** Sealed LMS session: launch claims minus exp, plus the resolved lab id. */
+export type VoshiSession = Omit<LaunchClaims, "exp"> & {
   labId: string | null;
-  gradePassback: boolean;
 };
 
 export { VOSHI_SESSION_COOKIE };
@@ -39,16 +31,10 @@ async function cookieKey(password: string): Promise<Uint8Array> {
  * @param claims - Parsed launch claims.
  */
 export function sessionFromClaims(claims: LaunchClaims): VoshiSession {
+  const { exp: _exp, ...rest } = claims;
   return {
-    launchId: claims.launchId,
-    userId: claims.userId,
-    role: claims.role,
-    courseId: claims.courseId,
-    locationId: claims.location.id,
-    locationType: claims.location.type,
-    locationLabel: claims.location.label,
-    labId: sanitizeLabId(claims.location.params.lab),
-    gradePassback: claims.gradePassback,
+    ...rest,
+    labId: sanitizeLabId(claims.location.extid),
   };
 }
 

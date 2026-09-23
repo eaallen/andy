@@ -15,7 +15,7 @@ This is an **npm workspaces monorepo**:
 npm install
 cp server/.env.example server/.dev.vars   # set GEMINI_API_KEY or META_API_KEY (or AI_PROVIDER=demo)
 # Also set WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_COOKIE_PASSWORD (WorkOS)
-# LMS: VOSHI_API_KEY (and optional VOSHI_COOKIE_PASSWORD)
+# LMS: optional VOSHI_API_KEY and VOSHI_COOKIE_PASSWORD
 ```
 
 Requires **Node.js ≥ 20**.
@@ -29,13 +29,13 @@ Requires **Node.js ≥ 20**.
 
 ### LMS (Voshi)
 
-Voshi sits between the LMS and Andy. Do **not** implement LTI (OIDC, platform JWKS, AGS, deep linking). Instructors place Andy via Voshi's content picker; Voshi POSTs a signed JWT to `POST /launch`.
+Voshi sits between the LMS and Andy. Do **not** implement LTI (OIDC, platform JWKS, AGS, deep linking). Instructors place Andy via Voshi's content picker. Andy serves that catalog and answers course setup; a person opening a placement POSTs a signed JWT to `POST /launch`.
 
-- Register the app at https://zen.voshi.com/app/ltiaas/s/ with callback `https://<host>/launch`. Copy `VOSHI_API_KEY` immediately.
-- Locations: use type `assessment` for graded labs. Set param `lab` to a catalog id (`doorbell`, `single-pole-lamp`, …). Home / missing param opens the picker.
+- Register the app at https://zen.voshi.com/app/ltiaas/s/ as **Self Hosted**. On Settings, set Callback `https://<host>/launch`, Provision `https://<host>/voshi/provision`, and Locations `https://<host>/voshi/locations`.
+- Each graded lab is one assessment location. The extid is the catalog id (`doorbell`, `single-pole-lamp`, …). Andy routes on `location.extid`.
 - Apps start as `draft`. Ask the MyEducator team to **activate** before LMS testing. Localhost callbacks are rejected; use a public HTTPS tunnel.
-- `VOSHI_COOKIE_PASSWORD` (≥32 chars) encrypts the LMS session cookie; falls back to `WORKOS_COOKIE_PASSWORD`.
-- **Submit** on a graded student assessment launch POSTs the current Check score (`1.0` pass / `0.0` fail) to Voshi (only when `grade_passback` is true). Check itself stays local.
+- `VOSHI_COOKIE_PASSWORD` (≥32 chars) encrypts the LMS session cookie; falls back to `WORKOS_COOKIE_PASSWORD`. The cookie holds `grade.submit` and `api.token`.
+- **Submit** on a student launch that has a grade URL POSTs the current Check score (`1.0` pass / `0.0` fail) to that URL with the launch `api.token`. Check itself stays local. Staff launches do not send grades. The Test tab has no gradebook, so `grade.submit` is null there.
 
 ### Dev
 
@@ -43,6 +43,8 @@ Voshi sits between the LMS and Andy. Do **not** implement LTI (OIDC, platform JW
 npm run dev              # Worker + site via Vite (Cloudflare plugin) — http://localhost:6767
 npm run dev:frontend     # frontend-only Vite (library / local experiments)
 ```
+
+`npm run dev` syncs `andy.js` + lab YAML into `server/public/` on start, then watches `frontend/js` and `frontend/public/labs` and re-syncs on change (hard-refresh `/lab` to pick up `andy.js`). Manual one-shot: `npm run sync:assets -w @andy/server`.
 
 Routes served by the Worker:
 
@@ -53,6 +55,8 @@ Routes served by the Worker:
 | `/author` | Diagram → YAML author UI (auth required) |
 | `/login`, `/signup` (POST), `/callback`, `/logout`, `/auth/initiate` | On-site WorkOS auth |
 | `/launch` | Voshi LMS launch receiver (form POST `launch_data`) |
+| `/voshi/provision` | Voshi course/location setup (form POST `launch_data`, then PUT provision URLs) |
+| `/voshi/locations` | Voshi content-picker catalog (form POST `launch_data`) |
 | `/api/voshi/grade` | Grade passback for LMS launches (Voshi session) |
 | `/api/diagrams/*` | AI diagram API (auth required) |
 | `/andy.js`, `/labs/*` | Static client lib + lab YAML |

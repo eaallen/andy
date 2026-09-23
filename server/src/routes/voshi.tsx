@@ -1,17 +1,19 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { setCookie } from "hono/cookie";
 import type { JWTVerifyGetKey } from "jose";
 import { readFormString } from "@/auth/login-url.js";
 import type { Env } from "@/config/env.js";
-import { getAppConfig } from "@/config/env.js";
+import { parseLocationsClaims, parseProvisionClaims } from "@/voshi/claims.js";
 import { isVoshiError, VoshiError } from "@/voshi/errors.js";
 import {
   canSubmitGrade,
   requireSyncedGrade,
   submitVoshiGrade,
 } from "@/voshi/grades.js";
-import { completeLaunch } from "@/voshi/launch.js";
+import { acceptVoshiToken, completeLaunch } from "@/voshi/launch.js";
+import { finishProvision } from "@/voshi/provision.js";
 import type { ReplayStore } from "@/voshi/replay.js";
+import { gradedLabLocations } from "@/voshi/route.js";
 import {
   defaultReplayStore,
   getVoshiSession,
@@ -58,7 +60,45 @@ function LaunchErrorPage(props: { title: string; message: string }) {
 }
 
 /**
- * Voshi LMS launch + grade passback routes. Does not implement LTI itself.
+ * Reads the launch_data form field or throws.
+ * @param c - Hono context.
+ */
+async function readLaunchToken(c: Context<AppEnv>): Promise<string> {
+  const body = await c.req.parseBody();
+  const token = readFormString(body, "launch_data");
+  if (!token) {
+    throw new VoshiError("Missing launch_data.", 422, "missing_launch_data");
+  }
+  return token;
+}
+
+/**
+ * Renders a Voshi error page.
+ * @param c - Hono context.
+ * @param err - Thrown value.
+ * @param logLabel - Log prefix for this route.
+ */
+function voshiErrorPage(c: Context<AppEnv>, err: unknown, logLabel: string) {
+  const error = isVoshiError(err)
+    ? err
+    : new VoshiError("Launch failed.", 401, "invalid_launch");
+  console.error(`[andy-server] voshi ${logLabel}:`, error.code, error.message);
+  return c.html(
+    <LaunchErrorPage title="Launch failed" message={error.message} />,
+    error.status,
+  );
+}
+
+/**
+ * Replay store for this request (test override or default).
+ * @param deps - Route dependencies.
+ */
+function replayFor(deps: VoshiRouteDeps): ReplayStore {
+  return deps.replay ?? defaultReplayStore();
+}
+
+/**
+ * Voshi LMS launch, provision, locations, and grade routes. Does not implement LTI itself.
  * @param deps - Optional JWKS/replay/fetch overrides for tests.
  */
 export function voshiRoutes(deps: VoshiRouteDeps = {}) {
@@ -69,21 +109,8 @@ export function voshiRoutes(deps: VoshiRouteDeps = {}) {
 
     try {
       assertVoshiCookiePassword(password);
-      const body = await c.req.parseBody();
-      const token = readFormString(body, "launch_data");
-      if (!token) {
-        throw new VoshiError(
-          "Missing launch_data.",
-          422,
-          "missing_launch_data",
-        );
-      }
-
-      const result = await completeLaunch(
-        token,
-        deps.replay ?? defaultReplayStore(),
-        deps.getKey,
-      );
+      const token = await readLaunchToken(c);
+      const result = await completeLaunch(token, replayFor(deps), deps.getKey);
       const sealed = await sealVoshiSession(result.session, password);
       setCookie(
         c,
@@ -93,14 +120,38 @@ export function voshiRoutes(deps: VoshiRouteDeps = {}) {
       );
       return c.redirect(result.redirectTo, 303);
     } catch (err) {
-      const error = isVoshiError(err)
-        ? err
-        : new VoshiError("Launch failed.", 401, "invalid_launch");
-      console.error("[andy-server] voshi launch:", error.code, error.message);
-      return c.html(
-        <LaunchErrorPage title="Launch failed" message={error.message} />,
-        error.status,
+      return voshiErrorPage(c, err, "launch");
+    }
+  });
+
+  routes.post("/voshi/provision", async (c) => {
+    try {
+      const token = await readLaunchToken(c);
+      const claims = await acceptVoshiToken(
+        token,
+        parseProvisionClaims,
+        replayFor(deps),
+        deps.getKey,
       );
+      await finishProvision(claims, deps.fetchImpl ?? fetch);
+      return c.body(null, 204);
+    } catch (err) {
+      return voshiErrorPage(c, err, "provision");
+    }
+  });
+
+  routes.post("/voshi/locations", async (c) => {
+    try {
+      const token = await readLaunchToken(c);
+      await acceptVoshiToken(
+        token,
+        parseLocationsClaims,
+        replayFor(deps),
+        deps.getKey,
+      );
+      return c.json({ locations: gradedLabLocations });
+    } catch (err) {
+      return voshiErrorPage(c, err, "locations");
     }
   });
 
@@ -121,20 +172,18 @@ export function voshiRoutes(deps: VoshiRouteDeps = {}) {
         );
       }
 
-      const config = getAppConfig(c.env);
       const payload = (await c.req.json().catch(() => ({}))) as {
         score?: unknown;
         comment?: unknown;
       };
-      const score =
-        payload.score === undefined ? 0 : payload.score;
+      const score = payload.score === undefined ? 0 : payload.score;
       const comment =
         typeof payload.comment === "string" ? payload.comment : undefined;
 
       const grade = requireSyncedGrade(
         await submitVoshiGrade({
-          apiKey: config.voshiApiKey,
-          launchId: session.launchId,
+          submitUrl: session.gradeSubmit ?? "",
+          apiToken: session.apiToken ?? "",
           score: score as number,
           comment,
           fetchImpl: deps.fetchImpl,
@@ -144,8 +193,7 @@ export function voshiRoutes(deps: VoshiRouteDeps = {}) {
       return c.json({
         ok: true,
         score: grade.score,
-        syncStatus: grade.sync_status,
-        syncError: grade.sync_error,
+        status: grade.status,
       });
     } catch (err) {
       console.error("[andy-server] voshi grade:", err);

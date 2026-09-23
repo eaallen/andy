@@ -13,13 +13,13 @@ import {
   createMemoryReplayStore,
   type ReplayStore,
 } from "@/voshi/replay.js";
-import type { VoshiUserRole } from "@/voshi/claims.js";
+import { isCourseStaff, type VoshiUserGroup } from "@/voshi/claims.js";
 
 export type LabClientContext = {
   labId: string | null;
   lockPicker: boolean;
   canGrade: boolean;
-  role: VoshiUserRole;
+  groups: VoshiUserGroup[];
   locationLabel: string;
 };
 
@@ -28,12 +28,13 @@ export type LabClientContext = {
  * @param session - Current Voshi session.
  */
 export function labClientContext(session: VoshiSession): LabClientContext {
+  const groups = session.groups ?? [];
   return {
     labId: session.labId,
-    lockPicker: session.role === "student" && Boolean(session.labId),
+    lockPicker: !isCourseStaff(groups) && Boolean(session.labId),
     canGrade: canSubmitGrade(session),
-    role: session.role,
-    locationLabel: session.locationLabel,
+    groups,
+    locationLabel: session.location.label,
   };
 }
 

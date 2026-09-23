@@ -151,6 +151,41 @@ export const CIRCUIT_LAB_CSS = `
   font-weight: 600;
 }
 
+.lab-hint-ref {
+  display: inline-block;
+  vertical-align: baseline;
+  margin: 0 1px;
+  padding: 1px 7px;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  background: #fef2f2;
+  box-shadow: 0 1px 0 rgba(185, 28, 28, 0.12);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #991b1b;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lab-hint-ref:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #7f1d1d;
+}
+
+.lab-hint-ref:active {
+  background: #fecaca;
+  box-shadow: none;
+  transform: translateY(1px);
+}
+
+.lab-hint-ref:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 1px;
+}
+
 .toolbar-zoom-label {
   min-width: 3.25rem;
   text-align: center;

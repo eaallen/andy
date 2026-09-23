@@ -40,14 +40,19 @@ npm run export:users -w @andy/server > users.csv
 
 ## LMS (Voshi)
 
-Andy does not speak LTI. [Voshi](https://myeducator-llc.github.io/voshi-docs/) verifies the LMS launch and POSTs a signed JWT to Andy.
+Andy does not speak LTI. [Voshi](https://myeducator-llc.github.io/voshi-docs/) sits between the LMS and Andy.
 
-1. Register the app at [the Voshi dashboard](https://zen.voshi.com/app/ltiaas/s/) with callback **`https://<your-worker>/launch`**. Copy the API key (`ltiaas_…`) into `VOSHI_API_KEY`.
-2. Add an `assessment` location per assignment (or reuse one location with param `lab=<catalog-id>`).
-3. Ask MyEducator to activate the app (`draft` apps cannot be launched). The callback must be public HTTPS — not localhost.
+1. Register the app at [the Voshi dashboard](https://zen.voshi.com/app/ltiaas/s/) as **Self Hosted**. On Settings, set:
+   - Callback **`https://<your-worker>/launch`**
+   - Provision **`https://<your-worker>/voshi/provision`**
+   - Locations **`https://<your-worker>/voshi/locations`**
+2. Instructors place labs from that locations endpoint. Each lab's extid is its catalog id (`doorbell`, `single-pole-lamp`, …). Placements that used a `lab` param need to be placed again.
+3. Ask MyEducator to activate the app (`draft` apps cannot be launched). All three URLs must be public HTTPS — not localhost.
 4. Set `VOSHI_COOKIE_PASSWORD` (or rely on `WORKOS_COOKIE_PASSWORD`) to at least 32 characters.
 
-**Submit** on a graded student launch sends the current circuit score (`1.0` pass / `0.0` fail) to the LMS. Check stays local. Instructor launches do not send grades. If the LMS did not create a line item (`grade_passback: false`), Submit is hidden.
+Provisioning marks the course and the lab ready and then returns. Andy does not copy course data.
+
+**Submit** on a student launch sends the current circuit score (`1.0` pass / `0.0` fail) to the launch's `grade.submit` URL, authorized with that launch's `api.token`. Check stays local. Staff launches do not send grades. If the placement has no gradebook column, `grade.submit` is null and Submit is hidden. The dashboard Test tab has no gradebook, so grade passback is checked from a real LMS course. `VOSHI_API_KEY` is unused by this Submit path.
 
 ## Providers
 

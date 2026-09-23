@@ -1,6 +1,8 @@
 import type { FC } from "hono/jsx";
 import type { SessionUser } from "@/auth/session.js";
+import { labPickerEntries } from "@/lab/graded-labs.js";
 import { Layout } from "@/pages/layout.js";
+import { isPureStudent } from "@/voshi/claims.js";
 import {
   labClientContext,
   serializeLabClientContext as sterilizeLabClientContext,
@@ -18,8 +20,12 @@ type PageProps = {
  */
 export const LabPage: FC<PageProps> = (props) => {
   const voshi = props.voshi ?? null;
-  const studentLaunch = voshi?.role === "student";
+  const studentLaunch = Boolean(voshi && isPureStudent(voshi.groups));
   const canGrade = voshi ? labClientContext(voshi).canGrade : false;
+  const pickerCatalog = JSON.stringify(labPickerEntries()).replace(
+    /</g,
+    "\\u003c",
+  );
 
   return (
     <Layout
@@ -30,7 +36,7 @@ export const LabPage: FC<PageProps> = (props) => {
       bodyClass={voshi ? "lab-body lab-embed" : "lab-body"}
       user={props.user}
       embed={Boolean(voshi)}
-      embedLabel={voshi?.locationLabel || "Circuit Lab"}
+      embedLabel={voshi?.location.label || "Circuit Lab"}
     >
       <div class="app-shell">
         <nav class="lab-picker" aria-label="Choose lab">
@@ -60,8 +66,13 @@ export const LabPage: FC<PageProps> = (props) => {
             ></span>
           </div>
         </nav>
+        <script
+          type="application/json"
+          id="andy-lab-catalog"
+          dangerouslySetInnerHTML={{ __html: pickerCatalog }}
+        />
         {voshi ? (
-          // I really dislike this idea. seems like since we are doing server side rendering 
+          // I really dislike this idea. seems like since we are doing server side rendering
           // we could expose this data in a more secure way
           <script
             type="application/json"

@@ -72,7 +72,7 @@ grading:
   continuity:
     - from: transformer.sec-hot
       to: chime.trans
-      fail: "Chime Trans is not powered from the transformer 24V hot."
+      fail: "[chime] [trans] is not powered from the [transformer] 24V hot."
   whenClosed:
     - switch: buttonFront
       energize: [front]

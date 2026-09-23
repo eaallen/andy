@@ -1,6 +1,8 @@
+import { voshiLocationsCatalog } from "@/lab/graded-labs.js";
+
 /**
- * Sanitizes a location.params.lab value into a lab catalog id.
- * @param raw - Candidate lab id (Voshi params are always strings).
+ * Sanitizes a location extid into a lab catalog id.
+ * @param raw - Candidate lab id from `location.extid`.
  */
 export function sanitizeLabId(raw: string | undefined | null): string | null {
   if (!raw || typeof raw !== "string") {
@@ -15,15 +17,17 @@ export function sanitizeLabId(raw: string | undefined | null): string | null {
 }
 
 /**
- * Builds the in-app path for a Voshi location.
- * Instructors set `lab` on the location (e.g. `doorbell`) so the assignment
- * opens that exercise. Home / missing param opens the lab picker.
- * @param params - Location params from the launch JWT.
+ * Builds the in-app path for a Voshi location extid.
+ * A known-shaped id opens that lab. Anything else opens the picker.
+ * @param extid - `location.extid` from the launch JWT.
  */
-export function labPathFromParams(params: Record<string, string>): string {
-  const labId = sanitizeLabId(params.lab);
+export function labPathFromExtid(extid: string | undefined | null): string {
+  const labId = sanitizeLabId(extid);
   if (!labId) {
     return "/lab";
   }
   return `/lab?lab=${encodeURIComponent(labId)}`;
 }
+
+/** Assessment locations Andy offers instructors, keyed by extid. */
+export const gradedLabLocations = voshiLocationsCatalog();

@@ -96,7 +96,7 @@ Response:
 
 Course placement and LTI are handled by [Voshi](https://myeducator-llc.github.io/voshi-docs/). Andy only receives a verified launch JWT at `POST /launch` and can push a 0–1 score via `POST /api/voshi/grade`.
 
-See [`server/README.md`](server/README.md#lms-voshi) for dashboard setup, location params (`lab=doorbell`), and secrets (`VOSHI_API_KEY`, `VOSHI_COOKIE_PASSWORD`).
+See [`server/README.md`](server/README.md#lms-voshi) for the three Voshi URLs, lab extids (`doorbell`), and `VOSHI_COOKIE_PASSWORD`.
 
 ## Included labs
 
@@ -137,7 +137,7 @@ Default production `AI_PROVIDER` is `demo` (see `server/wrangler.jsonc`). Set `A
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Worker + site (Vite Cloudflare) at `:6767` |
+| `npm run dev` | Worker + site at `:6767`; watches frontend assets and re-syncs `andy.js` / lab YAML |
 | `npm run dev:frontend` | Frontend Vite only (library experiments) |
 | `npm run build` | Sync assets + build Worker |
 | `npm run build:lib` | Build CDN IIFE `andy.js` |

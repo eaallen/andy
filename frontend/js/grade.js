@@ -1,3 +1,5 @@
+import { formatHintRef, formatHintRefList } from "./hint-refs.js";
+
 /**
  * Grades a student circuit from normalized config.grading rules.
  * @param {object} simulator - Circuit simulator from createCircuitSimulator.
@@ -127,23 +129,23 @@ export function createGrader(simulator, getComponents, grading) {
   function whenClosedFailureMessage(check) {
     const label =
       check.closedIds && check.closedIds.length > 1
-        ? "Closing [" + check.closedIds.join(", ") + "]"
+        ? "Closing " + formatHintRefList(check.closedIds)
         : check.closedIds && check.closedIds.length === 0
           ? "With all switches open/default"
-          : "Closing " + check.switchId;
+          : "Closing " + formatHintRef(check.switchId);
     if (check.lit.length === 0) {
       if (check.expected.length === 0) {
         return label + " should leave all loads off, but the check failed unexpectedly.";
       }
-      return label + " does not energize [" + check.expected.join(", ") + "].";
+      return label + " does not energize " + formatHintRefList(check.expected) + ".";
     }
     return (
       label +
-      " energized [" +
-      check.lit.join(", ") +
-      "] — expected [" +
-      check.expected.join(", ") +
-      "]."
+      " energized " +
+      formatHintRefList(check.lit) +
+      " — expected " +
+      formatHintRefList(check.expected) +
+      "."
     );
   }
 
@@ -160,7 +162,7 @@ export function createGrader(simulator, getComponents, grading) {
 
     const missing = checkComponentsPresent();
     if (missing.length > 0) {
-      failures.push("Missing components: " + missing.join(", "));
+      failures.push("Missing components: " + formatHintRefList(missing));
       return { pass: false, failures: failures };
     }
 

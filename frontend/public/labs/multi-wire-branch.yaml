@@ -49,21 +49,21 @@ grading:
   continuity:
     - from: power.l1
       to: lampA.hot
-      fail: "Power L1 is not wired to Lamp A hot."
+      fail: "[power] L1 is not wired to [lampA] hot."
     - from: power.l2
       to: lampB.hot
-      fail: "Power L2 is not wired to Lamp B hot."
+      fail: "[power] L2 is not wired to [lampB] hot."
     - from: lampA.n
       to: power.n
-      fail: "Lamp A neutral is not wired to the shared power neutral."
+      fail: "[lampA] neutral is not wired to the shared [power] neutral."
     - from: lampB.n
       to: power.n
-      fail: "Lamp B neutral is not wired to the shared power neutral."
+      fail: "[lampB] neutral is not wired to the shared [power] neutral."
   polarity:
     - load: lampA
-      fail: "Lamp A hot and neutral are reversed."
+      fail: "[lampA] hot and neutral are reversed."
     - load: lampB
-      fail: "Lamp B hot and neutral are reversed."
+      fail: "[lampB] hot and neutral are reversed."
   whenClosed:
     - closed: []
       energize: [lampA, lampB]

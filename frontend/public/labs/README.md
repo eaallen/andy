@@ -119,11 +119,11 @@ grading:
   continuity:                  # wires only (no switch bridges)
     - from: power.l1
       to: switch1.com
-      fail: "Power L1 is not wired to the switch COM."
+      fail: "[power] L1 is not wired to the [switch1] COM."
   polarity:                    # labeled orientation; load may still light if reversed
     - load: lamp
       closed: [switch1]        # optional; switches closed for the check (default [])
-      fail: "Lamp hot and neutral are reversed."
+      fail: "[lamp] hot and neutral are reversed."
   whenClosed:                  # close named switch(es); exactly these loads must be live
     - switch: switch1          # legacy single-switch form
       energize: [lamp]
@@ -133,6 +133,8 @@ grading:
     # - closed: [sw1, sw2]
     #   energize: []
 ```
+
+Put `[componentId]`, uniquely owned terminal ids like `[trans]`, or `component.terminal` in `fail:` strings so Check can turn them into clickable links (component outline or terminal pulse). Generated `whenClosed` messages already include switch and load ids.
 
 `whenClosed` requires a `simulation` block so `energize` ids can be validated. Use `closed: []` when loads should be live with no switches thrown (GFCI, multi-wire). `polarity` checks that `requireHot` reaches supply hot and `signal` reaches supply return (oriented); visual energize stays polarity-agnostic.
 ## Built-in component catalog

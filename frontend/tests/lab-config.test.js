@@ -86,7 +86,7 @@ describe("lab config parsing", () => {
       {
         from: { component: "transformer", terminal: "sec-hot" },
         to: { component: "chime", terminal: "trans" },
-        fail: "Chime Trans is not powered from the transformer 24V hot.",
+        fail: "[chime] [trans] is not powered from the [transformer] 24V hot.",
       },
     ]);
     expect(config.grading.whenClosed).toEqual([
@@ -128,12 +128,12 @@ describe("lab config parsing", () => {
       {
         load: "lampA",
         closed: [],
-        fail: "Lamp A hot and neutral are reversed.",
+        fail: "[lampA] hot and neutral are reversed.",
       },
       {
         load: "lampB",
         closed: [],
-        fail: "Lamp B hot and neutral are reversed.",
+        fail: "[lampB] hot and neutral are reversed.",
       },
     ]);
   });

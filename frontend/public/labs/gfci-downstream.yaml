@@ -44,22 +44,22 @@ grading:
   continuity:
     - from: power.l1
       to: gfci.line-hot
-      fail: "Power L1 is not wired to GFCI LINE hot."
+      fail: "[power] L1 is not wired to [gfci] LINE hot."
     - from: power.n
       to: gfci.line-n
-      fail: "Power neutral is not wired to GFCI LINE neutral."
+      fail: "[power] neutral is not wired to [gfci] LINE neutral."
     - from: power.g
       to: gfci.line-g
-      fail: "Power ground is not wired to GFCI LINE ground."
+      fail: "[power] ground is not wired to [gfci] LINE ground."
     - from: gfci.load-hot
       to: receptacle.hot
-      fail: "GFCI LOAD hot is not wired to the downstream receptacle hot."
+      fail: "[gfci] LOAD hot is not wired to the downstream [receptacle] hot."
     - from: gfci.load-n
       to: receptacle.n
-      fail: "GFCI LOAD neutral is not wired to the downstream receptacle neutral."
+      fail: "[gfci] LOAD neutral is not wired to the downstream [receptacle] neutral."
     - from: gfci.load-g
       to: receptacle.g
-      fail: "GFCI LOAD ground is not wired to the downstream receptacle ground."
+      fail: "[gfci] LOAD ground is not wired to the downstream [receptacle] ground."
   whenClosed:
     - closed: []
       energize: [receptacle]

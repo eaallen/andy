@@ -10,7 +10,9 @@ import { createWireMenu } from "./wire-menu.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
 import { createGrader } from "./grade.js";
+import { buildHintRefCatalog, renderFailHint } from "./hint-refs.js";
 import { resolveCoord } from "./lab-config.js";
+import { pulseHintTarget } from "./pulse-outline.js";
 import {
   BUTTON_SCALE_BY,
   INITIAL_VIEW,
@@ -69,6 +71,8 @@ export function bootCircuitLab(host, config) {
     titleEl.textContent = config.title;
   }
 
+  const hintRefCatalog = buildHintRefCatalog(config);
+
   /**
    * Syncs CSS variable for stage height under the toolbar.
    */
@@ -79,12 +83,26 @@ export function bootCircuitLab(host, config) {
 
   /**
    * Sets the hint text and optional pass/fail styling.
+   * Fail status linkifies known component/load ids; other statuses stay plain text.
    * @param {string} text - Message to show.
    * @param {"pass" | "fail" | ""} [status] - Optional status class.
    */
   function setHint(text, status) {
-    hintEl.textContent = text;
     hintEl.classList.remove("pass", "fail");
+    if (status === "fail") {
+      renderFailHint(hintEl, text, hintRefCatalog, function (segment) {
+        const map = getComponents();
+        const group = map[segment.componentId];
+        const terminal =
+          segment.terminalId && group
+            ? findTerminal(group, segment.terminalId)
+            : null;
+        pulseHintTarget(group, terminal);
+      });
+      hintEl.classList.add("fail");
+      return;
+    }
+    hintEl.textContent = text;
     if (status) {
       hintEl.classList.add(status);
     }

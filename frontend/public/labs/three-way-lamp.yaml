@@ -50,19 +50,19 @@ grading:
   continuity:
     - from: power.l1
       to: sw1.com
-      fail: "Power L1 is not wired to the first 3-way COM."
+      fail: "[power] L1 is not wired to the first 3-way [sw1] COM."
     - from: sw1.t1
       to: sw2.t1
-      fail: "Traveler T1 is not connected between the 3-way switches."
+      fail: "Traveler T1 is not connected between [sw1] and [sw2]."
     - from: sw1.t2
       to: sw2.t2
-      fail: "Traveler T2 is not connected between the 3-way switches."
+      fail: "Traveler T2 is not connected between [sw1] and [sw2]."
     - from: sw2.com
       to: lamp.hot
-      fail: "Second 3-way COM is not wired to the lamp hot."
+      fail: "Second 3-way [sw2] COM is not wired to the [lamp] hot."
     - from: lamp.n
       to: power.n
-      fail: "Lamp neutral is not wired to power neutral."
+      fail: "[lamp] neutral is not wired to [power] neutral."
   whenClosed:
     # Both on T1 (default) → lamp on
     - closed: []
