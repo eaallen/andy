@@ -5,20 +5,29 @@ import {
   WIRE_COLORS,
   wireColorOptionsFor,
 } from "./components/constants.js";
+import {
+  DEFAULT_RESISTOR_OHMS,
+  DEFAULT_SUPPLY_VOLTS,
+  defaultOhmsForComponentType,
+} from "./electrical.js";
 
 /**
  * Reads and normalizes a circuit-lab YAML or JSON definition into a runtime config.
  *
  * Lab file fields (YAML or JSON — both parsed with js-yaml):
  *   title, margin, hints.{demo,lab}, passMessage
+ *   measurements?: boolean (default true) — start with V/I/R canvas labels on
  *   defaultWireColor?: color key (default black) — last-selected color starts here
  *   wireColors?: [color keys] — colors available in the wire picker
- *   components[]: { id, type, label?, x, y, legs?, kind? } — legs/kind only for power (defaults 1 / ac)
+ *   components[]: { id, type, label?, x, y, legs?, kind?, ohms? }
+ *     legs/kind only for power (defaults 1 / ac); ohms for resistor (default 100)
  *   demo.wires[]: { from, to, color? } or [from, to, color?]
  *     Endpoints are "componentId.terminalId".
  *   simulation (optional until the lab defines it):
- *     supply: { hot, return } — "component.terminal" or array of hots (multi-wire)
- *     loads[]: { id, requireHot, signal, feedback?: { type, profile? } }
+ *     supply: { hot, return, volts? } — volts defaults to 120
+ *     loads[]: { id, requireHot, signal, ohms?, feedback?: { type, profile? } }
+ *       ohms defaults by component type (lamp 144, chime 24, resistor from component);
+ *       receptacle / gfci stay open-circuit probes (ohms null)
  *     switches[]?: { id, bridges: [[a,b], ...] } — override default button bridges
  *   grading (optional until the lab defines it):
  *     required[]: component ids that must be present
@@ -28,7 +37,7 @@ import {
  *
  * Built-in component types (factories live under components/):
  *   power, transformer, chime, terminal-block, button, switch, three-way,
- *   four-way, lamp, receptacle, gfci
+ *   four-way, lamp, receptacle, gfci, resistor
  */
 
 /**
@@ -340,7 +349,43 @@ function normalizeComponent(entry, index) {
     }
   }
 
+  if (entry.ohms != null || type === "resistor") {
+    const ohms = normalizeComponentOhms(entry.ohms, entry.id, type);
+    if (type === "resistor") {
+      normalized.ohms = ohms;
+    } else if (entry.ohms != null) {
+      // Allow ohms on any component as a hint for the matching simulation load.
+      normalized.ohms = ohms;
+    }
+  }
+
   return normalized;
+}
+
+/**
+ * Normalizes a positive resistance in ohms for a component.
+ * @param {unknown} rawOhms - Raw ohms value from YAML.
+ * @param {string} componentId - Component id for error messages.
+ * @param {string} type - Component type string.
+ */
+function normalizeComponentOhms(rawOhms, componentId, type) {
+  if (rawOhms == null || rawOhms === "") {
+    if (type === "resistor") {
+      return DEFAULT_RESISTOR_OHMS;
+    }
+    throw labConfigError('Component "' + componentId + '" ohms is required when set.');
+  }
+  const ohms = Number(rawOhms);
+  if (!Number.isFinite(ohms) || ohms <= 0) {
+    throw labConfigError(
+      'Component "' +
+        componentId +
+        '" ohms must be a positive number (got ' +
+        String(rawOhms) +
+        ")."
+    );
+  }
+  return ohms;
 }
 
 /**
@@ -426,6 +471,34 @@ function normalizeFeedback(feedback, context) {
 }
 
 /**
+ * Resolves load resistance: explicit ohms, component ohms, or type default (null = open).
+ * @param {object} entry - Raw load row.
+ * @param {{ component: string, terminal: string }} requireHot - Normalized hot endpoint.
+ * @param {{ [id: string]: object }} componentById - Map of declared components.
+ * @param {string} context - Error context label.
+ */
+function resolveLoadOhms(entry, requireHot, componentById, context) {
+  if (entry.ohms != null && entry.ohms !== "") {
+    const ohms = Number(entry.ohms);
+    if (!Number.isFinite(ohms) || ohms <= 0) {
+      throw labConfigError(
+        context + ".ohms must be a positive number (got " + String(entry.ohms) + ")."
+      );
+    }
+    return ohms;
+  }
+
+  const component = componentById[requireHot.component];
+  if (!component) {
+    return null;
+  }
+  if (component.ohms != null && Number.isFinite(component.ohms) && component.ohms > 0) {
+    return component.ohms;
+  }
+  return defaultOhmsForComponentType(component.type);
+}
+
+/**
  * Normalizes one simulation load entry.
  * @param {object} entry - Raw load row.
  * @param {number} index - Row index for error messages.
@@ -446,10 +519,18 @@ function normalizeLoad(entry, index, componentById) {
     throw labConfigError(context + ' ("' + entry.id + '") needs signal: "component.terminal".');
   }
 
+  const requireHot = parseAndAssertEndpoint(
+    entry.requireHot,
+    componentById,
+    context + ".requireHot"
+  );
+  const signal = parseAndAssertEndpoint(entry.signal, componentById, context + ".signal");
+
   return {
     id: String(entry.id),
-    requireHot: parseAndAssertEndpoint(entry.requireHot, componentById, context + ".requireHot"),
-    signal: parseAndAssertEndpoint(entry.signal, componentById, context + ".signal"),
+    requireHot: requireHot,
+    signal: signal,
+    ohms: resolveLoadOhms(entry, requireHot, componentById, context),
     feedback: normalizeFeedback(entry.feedback, context),
   };
 }
@@ -557,10 +638,23 @@ function normalizeSimulation(raw, componentById) {
     );
   });
 
+  let volts = DEFAULT_SUPPLY_VOLTS;
+  if (supplyRaw.volts != null && supplyRaw.volts !== "") {
+    volts = Number(supplyRaw.volts);
+    if (!Number.isFinite(volts) || volts <= 0) {
+      throw labConfigError(
+        "simulation.supply.volts must be a positive number (got " +
+          String(supplyRaw.volts) +
+          ")."
+      );
+    }
+  }
+
   return {
     supply: {
       hot: hot,
       return: parseAndAssertEndpoint(supplyRaw.return, componentById, "simulation.supply.return"),
+      volts: volts,
     },
     loads: loads,
     switches: switches,
@@ -807,6 +901,7 @@ export function normalizeLabConfig(raw) {
   return {
     title: raw.title ? String(raw.title) : "Circuit Lab",
     margin: margin,
+    measurements: raw.measurements === undefined ? true : !!raw.measurements,
     hints: {
       demo: hints.demo ? String(hints.demo) : "",
       lab: hints.lab ? String(hints.lab) : "",

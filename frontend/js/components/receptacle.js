@@ -3,6 +3,7 @@ import { COMPONENT_TYPES, TERMINAL_ROLES } from "./constants.js";
 import {
   TERMINAL_OUTSET,
   addComponentShell,
+  addMeasurementReadout,
   addTerminal,
   initComponent,
   nextComponentInstanceId,
@@ -62,6 +63,7 @@ export function makeReceptacle(label, x, y) {
       listening: false,
     })
   );
+  addMeasurementReadout(group, 6, 78, shell.width - 12);
 
   const terminalY = shell.height + TERMINAL_OUTSET;
   const spacing = shell.width / 4;

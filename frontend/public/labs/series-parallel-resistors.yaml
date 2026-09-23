@@ -1,0 +1,87 @@
+title: Series / Parallel Resistors Lab
+margin: 40
+passMessage: Pass — series pair shares current; the parallel branch takes its own.
+hints:
+  demo: >-
+    Demo: R1 and R2 are daisy-chained (series); R3 sits in parallel with that
+    pair. Watch volts and amps — series voltages add, parallel currents add.
+    Toggle Measurements off for a quieter canvas.
+  lab: >-
+    Lab: wire R1 and R2 in series across 120 V, and wire R3 in parallel with
+    that series pair. Check that all three resistors carry current.
+
+components:
+  - id: power
+    type: power
+    x: margin
+    y: center-50
+  - id: r1
+    type: resistor
+    label: R1
+    ohms: 60
+    x: center-140
+    y: center-120
+  - id: r2
+    type: resistor
+    label: R2
+    ohms: 60
+    x: center+20
+    y: center-120
+  - id: r3
+    type: resistor
+    label: R3
+    ohms: 120
+    x: center-60
+    y: center+40
+
+simulation:
+  supply:
+    hot: power.l1
+    return: power.n
+    volts: 120
+  loads:
+    - id: r1
+      requireHot: r1.a
+      signal: r1.b
+    - id: r2
+      requireHot: r2.a
+      signal: r2.b
+    - id: r3
+      requireHot: r3.a
+      signal: r3.b
+
+grading:
+  required:
+    - power
+    - r1
+    - r2
+    - r3
+  continuity:
+    - from: power.l1
+      to: r1.a
+      fail: "[power] L1 is not wired into the series string at [r1] A."
+    - from: r1.b
+      to: r2.a
+      fail: "[r1] B is not daisy-chained to [r2] A."
+    - from: r2.b
+      to: power.n
+      fail: "[r2] B is not returned to [power] neutral."
+    - from: power.l1
+      to: r3.a
+      fail: "[power] L1 is not wired to parallel [r3] A."
+    - from: r3.b
+      to: power.n
+      fail: "[r3] B is not returned to [power] neutral."
+  whenClosed:
+    - closed: []
+      energize: [r1, r2, r3]
+
+demo:
+  wires:
+    # Series string: L1 → R1 → R2 → N
+    - { from: power.l1, to: r1.a, color: blue }
+    - { from: r1.b, to: r2.a, color: black }
+    - { from: r2.b, to: power.n, color: gray }
+    # Parallel branch: L1 → R3 → N
+    - { from: power.l1, to: r3.a, color: red }
+    - { from: r3.b, to: power.n, color: gray }

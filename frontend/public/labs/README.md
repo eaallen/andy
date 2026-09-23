@@ -20,6 +20,7 @@ Top-level fields:
 | --- | --- | --- |
 | `title` | yes | Lab title shown in the UI |
 | `margin` | no | Stage margin in px (default applied by loader) |
+| `measurements` | no | Start with canvas V/I/R labels on (`true`, default) or off (`false`). Toolbar toggle still works. |
 | `passMessage` | no | Message when Check passes |
 | `hints.demo` / `hints.lab` | no | Mode hint text |
 | `defaultWireColor` | no | Starting / remembered wire color for new wires (default `black`) |
@@ -73,17 +74,19 @@ Omit both fields to use the defaults above. `defaultWireColor` must be one of th
 
 ### Simulation
 
-A load is energized when one of its terminals can reach `supply.hot` **and** the other can reach `supply.return`, through wires plus closed-switch bridges — **either polarity lights the load** (like a real lamp). Use `grading.polarity` (or terminal-specific `continuity`) to require labeled hot/neutral orientation.
+The simulator solves a DC-equivalent resistive network (Ohm’s law). Conductive loads (lamps, chime coils, resistors) pass current, so **series daisy-chains share current and split voltage**, and **parallel branches add current**. A load is energized when it carries current (or, for open-circuit probes like receptacles, when a voltage appears across its terminals). Either polarity still lights a lamp; use `grading.polarity` (or terminal-specific `continuity`) to require labeled hot/neutral orientation.
 
 ```yaml
 simulation:
   supply:
     hot: power.l1              # or [power.l1, power.l2] for multi-wire
     return: power.n
+    volts: 120                 # optional; default 120 (doorbell secondary uses 24)
   loads:
     - id: lamp                 # used by grading.whenClosed.energize
       requireHot: lamp.hot
       signal: lamp.n
+      ohms: 144                # optional; defaults by type (lamp 144, chime 24, resistor from component)
       feedback: { type: light } # or { type: sound, profile: dingDong }
   # Optional — only if default bridges are wrong for a switch:
   # switches:
@@ -97,6 +100,8 @@ simulation:
 | --- | --- |
 | `sound` | Plays `profile` when the load is live (`dingDong`, `buzz`) |
 | `light` | Lights a `lamp` component when the load is live (no sound) |
+
+Loads are **conductive** when they have a positive `ohms` (lamps, chime coils, resistors). Receptacles / GFCI outlets stay **open-circuit probes**: live when a voltage appears across their terminals. The simulator solves Ohm’s law (series / parallel / daisy-chain) and the toolbar **Measurements** toggle shows volts, amps, and ohms on the canvas.
 
 **Default switch bridges** (when closed; override with `simulation.switches`):
 
@@ -235,12 +240,30 @@ SPDT 3-way switch. Always bridges COM to one traveler: open → `t1`, closed →
 
 ### `lamp`
 
-Load with visual on/off from `feedback: { type: light }`.
+Load with visual on/off from `feedback: { type: light }`. Default resistance 144 Ω (~100 W at 120 V).
 
 | Terminal id | Label |
 | --- | --- |
 | `hot` | Hot |
 | `n` | N |
+
+### `resistor`
+
+Two-terminal resistive load for Ohm’s-law labs. Set `ohms` on the component (default 100). Pair with a `simulation.loads` entry spanning `a` / `b`.
+
+```yaml
+- id: r1
+  type: resistor
+  label: R1
+  ohms: 60
+  x: center
+  y: center
+```
+
+| Terminal id | Label |
+| --- | --- |
+| `a` | A |
+| `b` | B |
 
 ### `receptacle`
 
@@ -285,11 +308,16 @@ Two 3-ways with a `four-way` in the traveler path. Any switch can toggle the lam
 
 ### GFCI downstream (`gfci-downstream.yaml`)
 
-Power → GFCI LINE; LOAD feeds a downstream `receptacle`. Check verifies LINE/LOAD wiring and that the receptacle is energized through internal bridges.
+Power → GFCI LINE; LOAD feeds a downstream `receptacle`. Check verifies LINE/LOAD wiring and that the receptacle is energized through internal bridges. Starts with `measurements: false` (continuity focus; toolbar can still turn labels on).
 
 ### Multi-wire branch (`multi-wire-branch.yaml`)
 
 `supply.hot: [power.l1, power.l2]` feeds two lamps on a shared neutral.
+
+### Series / parallel resistors (`series-parallel-resistors.yaml`)
+
+R1 and R2 daisy-chained in series; R3 in parallel with that pair. Measurements show shared series current, split voltages, and the parallel branch at full supply voltage.
+
 ## Authoring checklist (for humans and AI)
 
 1. Give every component a **unique `id`**.
@@ -306,5 +334,5 @@ Power → GFCI LINE; LOAD feeds a downstream `receptacle`. Check verifies LINE/L
 ## Out of scope for lab files
 
 - New geometric drawings or terminal layouts (needs JS)
-- True electrical physics (voltage drop, shorts as physics)
+- Wire gauge / length voltage-drop formulas, breaker trip, AC power factor
 - Formal JSON Schema / CI validator package

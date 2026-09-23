@@ -39,6 +39,12 @@ export const GRADED_LABS = [
     points: 100,
     src: "/labs/multi-wire-branch.yaml",
   },
+  {
+    id: "series-parallel-resistors",
+    label: "Series / Parallel Resistors",
+    points: 100,
+    src: "/labs/series-parallel-resistors.yaml",
+  },
 ] as const;
 
 export type GradedLabId = (typeof GRADED_LABS)[number]["id"];

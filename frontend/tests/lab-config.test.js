@@ -57,6 +57,7 @@ describe("lab config parsing", () => {
       supply: {
         hot: [{ component: "transformer", terminal: "sec-hot" }],
         return: { component: "transformer", terminal: "sec-com" },
+        volts: 24,
       },
     });
     expect(config.simulation.loads).toEqual([
@@ -64,12 +65,14 @@ describe("lab config parsing", () => {
         id: "front",
         requireHot: { component: "chime", terminal: "trans" },
         signal: { component: "chime", terminal: "front" },
+        ohms: 24,
         feedback: { type: "sound", profile: "dingDong" },
       },
       {
         id: "rear",
         requireHot: { component: "chime", terminal: "trans" },
         signal: { component: "chime", terminal: "rear" },
+        ohms: 24,
         feedback: { type: "sound", profile: "buzz" },
       },
     ]);
@@ -136,6 +139,18 @@ describe("lab config parsing", () => {
         fail: "[lampB] hot and neutral are reversed.",
       },
     ]);
+    expect(config.measurements).toBe(true);
+  });
+
+  it("defaults measurements on and honors measurements: false", () => {
+    const on = normalizeLabConfig({
+      components: [{ id: "power", type: "power", x: 0, y: 0 }],
+    });
+    expect(on.measurements).toBe(true);
+
+    const yaml = readFileSync(join(root, "public/labs/gfci-downstream.yaml"), "utf8");
+    const gfci = normalizeLabConfig(parseLabSource(yaml, "yaml"));
+    expect(gfci.measurements).toBe(false);
   });
 
   it("normalizes grading.polarity with closed switches", () => {

@@ -1,8 +1,17 @@
 import { COMPONENT_TYPES, TERMINAL_ROLES } from "./components/constants.js";
 import { findTerminal, getTerminalComponentGroup } from "./components/shared.js";
+import { solveResistiveNetwork } from "./circuit-solve.js";
+import {
+  buildFixedVoltages,
+  buildNetworkBranches,
+  interpretSolveResult,
+  resolveSupplyVolts,
+} from "./circuit-network.js";
 
 /**
- * Builds continuity simulation helpers from a normalized lab simulation config.
+ * Builds continuity + analog simulation helpers from a normalized lab simulation config.
+ * Continuity (areWiredTogether) stays wire-only BFS. Energize uses Ohm’s-law nodal solve.
+ * Network stamp / interpret live in circuit-network.js; this factory owns topology + BFS.
  * @param {() => object[]} getWires - Returns the current wire list.
  * @param {() => object} getComponents - Returns the current component map (config id → group).
  * @param {object|null} simulation - Normalized config.simulation (supply, loads, switches).
@@ -339,14 +348,12 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
   }
 
   /**
-   * Resolves supply terminals and BFS reachability for the given closed switches.
-   * @param {string[]} closedSwitchIds - Closed switch/button component ids.
+   * Resolves supply hot terminals, return terminal, and volts magnitude.
    */
-  function supplyReachability(closedSwitchIds) {
+  function resolveSupply() {
     if (!simulation || !simulation.supply) {
       return null;
     }
-
     const hotRefs = Array.isArray(simulation.supply.hot)
       ? simulation.supply.hot
       : simulation.supply.hot
@@ -363,39 +370,77 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
     if (hotTerminals.length === 0 || !ret) {
       return null;
     }
+    return {
+      hotTerminals: hotTerminals,
+      returnTerminal: ret,
+      volts: resolveSupplyVolts(simulation.supply.volts),
+    };
+  }
+
+  /**
+   * Snapshots topology, solves the resistive network, and interprets energize/overlay fields.
+   * @param {string[]} closedSwitchIds - Closed switch/button component ids.
+   */
+  function solveCircuit(closedSwitchIds) {
+    const supply = resolveSupply();
+    if (!supply) {
+      return null;
+    }
+    const wires = getWires() || [];
+    const branches = buildNetworkBranches({
+      wires: wires,
+      bridges: switchBridgeEdges(closedSwitchIds || []),
+      loads: simulation && Array.isArray(simulation.loads) ? simulation.loads : [],
+      terminalKey: terminalKey,
+      resolveEndpoint: resolveEndpoint,
+    });
+    const hotKeys = [];
+    for (let i = 0; i < supply.hotTerminals.length; i += 1) {
+      hotKeys.push(terminalKey(supply.hotTerminals[i]));
+    }
+    const returnKey = terminalKey(supply.returnTerminal);
+    const fixedVoltages = buildFixedVoltages(hotKeys, returnKey, supply.volts);
+    const solved = solveResistiveNetwork({
+      branches: branches,
+      fixedVoltages: fixedVoltages,
+    });
+    return {
+      supply: supply,
+      returnKey: returnKey,
+      wireCount: wires.length,
+      branches: branches,
+      voltages: solved.voltages,
+      currents: solved.currents,
+      short: solved.short,
+    };
+  }
+
+  /**
+   * Resolves supply terminals and BFS reachability for the given closed switches.
+   * Kept for polarity grading (hot rail ≠ signed voltage on split-phase).
+   * @param {string[]} closedSwitchIds - Closed switch/button component ids.
+   */
+  function supplyReachability(closedSwitchIds) {
+    const supply = resolveSupply();
+    if (!supply) {
+      return null;
+    }
 
     const bridges = switchBridgeEdges(closedSwitchIds);
     const adjacency = buildAdjacency(bridges);
     /** @type {{ [key: string]: boolean }} */
     const fromHot = {};
-    for (let i = 0; i < hotTerminals.length; i += 1) {
-      Object.assign(fromHot, bfs(adjacency, hotTerminals[i]));
+    for (let i = 0; i < supply.hotTerminals.length; i += 1) {
+      Object.assign(fromHot, bfs(adjacency, supply.hotTerminals[i]));
     }
     return {
       fromHot: fromHot,
-      fromReturn: bfs(adjacency, ret),
+      fromReturn: bfs(adjacency, supply.returnTerminal),
     };
   }
 
   /**
-   * Returns whether a two-terminal load bridges supply hot and return in either
-   * polarity (real-life lamp behavior).
-   * @param {{ [key: string]: boolean }} fromHot - Terminals reachable from supply hot.
-   * @param {{ [key: string]: boolean }} fromReturn - Terminals reachable from supply return.
-   * @param {object} requireHot - Load terminal labeled hot.
-   * @param {object} signal - Load terminal labeled return/neutral.
-   */
-  function loadEnergizedEitherPolarity(fromHot, fromReturn, requireHot, signal) {
-    const aHot = !!fromHot[terminalKey(requireHot)];
-    const bHot = !!fromHot[terminalKey(signal)];
-    const aRet = !!fromReturn[terminalKey(requireHot)];
-    const bRet = !!fromReturn[terminalKey(signal)];
-    return (aHot && bRet) || (bHot && aRet);
-  }
-
-  /**
-   * Returns whether a load is wired in the labeled polarity:
-   * requireHot → supply hot and signal → supply return.
+   * Returns whether a load is wired in the labeled polarity via BFS reachability.
    * @param {{ [key: string]: boolean }} fromHot - Terminals reachable from supply hot.
    * @param {{ [key: string]: boolean }} fromReturn - Terminals reachable from supply return.
    * @param {object} requireHot - Load terminal labeled hot.
@@ -407,58 +452,45 @@ export function createCircuitSimulator(getWires, getComponents, simulation) {
 
   /**
    * Simulates the circuit with the given switches closed.
-   * A load is live when one terminal reaches supply hot and the other reaches
-   * supply return, in either polarity (wires + closed-switch bridges).
+   * Uses Ohm’s-law nodal analysis; a load is energized when it carries current
+   * (conductive) or shows a voltage drop (open-circuit probe).
    * @param {string[]} closedSwitchIds - Closed switch/button component ids.
    */
   function simulate(closedSwitchIds) {
-    const result = {
+    const empty = {
       energized: emptyEnergized(),
       pathKeys: {},
+      voltages: {},
+      currents: {},
+      wireCurrents: [],
+      loadCurrents: {},
+      loadVoltages: {},
+      short: false,
     };
 
     if (!simulation || !Array.isArray(simulation.loads)) {
-      return result;
+      return empty;
     }
 
-    const reach = supplyReachability(closedSwitchIds || []);
-    if (!reach) {
-      return result;
+    const solved = solveCircuit(closedSwitchIds || []);
+    if (!solved) {
+      return empty;
     }
 
-    result.pathKeys = Object.assign({}, reach.fromHot);
-
-    let anyLoadLive = false;
-    for (let i = 0; i < simulation.loads.length; i += 1) {
-      const load = simulation.loads[i];
-      const requireHot = resolveEndpoint(load.requireHot);
-      const signal = resolveEndpoint(load.signal);
-      if (!requireHot || !signal) {
-        continue;
-      }
-      if (
-        loadEnergizedEitherPolarity(
-          reach.fromHot,
-          reach.fromReturn,
-          requireHot,
-          signal
-        )
-      ) {
-        result.energized[load.id] = true;
-        anyLoadLive = true;
-      }
-    }
-
-    if (anyLoadLive) {
-      Object.assign(result.pathKeys, reach.fromReturn);
-    }
-
-    return result;
+    return interpretSolveResult(solved, {
+      loads: simulation.loads,
+      returnKey: solved.returnKey,
+      wireCount: solved.wireCount,
+      terminalKey: terminalKey,
+      resolveEndpoint: resolveEndpoint,
+      emptyEnergized: emptyEnergized,
+    });
   }
 
   /**
    * Returns whether a simulation load is wired in the labeled hot/neutral polarity.
    * Visual energize stays polarity-agnostic; use this for grading deductions.
+   * Uses rail reachability so split-phase L2 (−V) loads grade correctly.
    * @param {string} loadId - Simulation load id.
    * @param {string[]} [closedSwitchIds] - Closed switch/button ids for the check.
    */

@@ -50,6 +50,7 @@ simulation:
   supply:
     hot: transformer.sec-hot
     return: transformer.sec-com
+    volts: 24
   loads:
     - id: front
       requireHot: chime.trans

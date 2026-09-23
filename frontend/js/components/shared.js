@@ -71,6 +71,36 @@ export function initComponent(group, componentType, instanceId, terminals) {
   group.dragDistance(10);
 }
 
+/**
+ * Adds an in-component measurement text slot. The overlay fills this node so
+ * labels live where the factory placed them and drag with the device.
+ * @param {Konva.Group} group - Component group.
+ * @param {number} x - Local x.
+ * @param {number} y - Local y.
+ * @param {number} width - Text box width.
+ * @param {{ align?: string, fontSize?: number }} [options] - Text options.
+ */
+export function addMeasurementReadout(group, x, y, width, options) {
+  const opts = options || {};
+  const node = new Konva.Text({
+    x: x,
+    y: y,
+    width: width,
+    align: opts.align || "center",
+    text: "",
+    fontSize: opts.fontSize || 10,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontStyle: "bold",
+    fill: "#334155",
+    listening: false,
+    visible: false,
+    name: "measurement-readout",
+  });
+  group.add(node);
+  group.measurementReadout = node;
+  return node;
+}
+
 /** Distance from a shell edge to a terminal center (terminals sit just outside). */
 export const TERMINAL_OUTSET = 16;
 

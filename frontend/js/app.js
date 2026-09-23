@@ -1,7 +1,5 @@
 import Konva from "konva";
 import { applyDoorbellButtonVisual } from "./components/button.js";
-import { COMPONENT_TYPES } from "./components/constants.js";
-import { applyLampVisual } from "./components/lamp.js";
 import { createLayoutFromConfig } from "./components/registry.js";
 import { findTerminal } from "./components/shared.js";
 import { applySwitchVisual } from "./components/switch-shared.js";
@@ -11,6 +9,7 @@ import { createMessagesPanel } from "./messages-panel.js";
 import { createCircuitSimulator } from "./circuit.js";
 import { createSoundPlayer } from "./sounds.js";
 import { createGrader } from "./grade.js";
+import { createMeasurementsOverlay } from "./measurements-overlay.js";
 import { buildHintRefCatalog, renderFailHint } from "./hint-refs.js";
 import { resolveCoord } from "./lab-config.js";
 import { pulseHintTarget } from "./pulse-outline.js";
@@ -58,6 +57,7 @@ export function bootCircuitLab(host, config) {
   const btnTest = uiRoot.querySelector("[data-lab-action=\"test\"]");
   const btnCheck = uiRoot.querySelector("[data-lab-action=\"check\"]");
   const btnUndo = uiRoot.querySelector("[data-lab-action=\"undo\"]");
+  const btnMeasurements = uiRoot.querySelector("[data-lab-action=\"measurements\"]");
   const stageWrap = uiRoot.querySelector("[data-lab-stage-wrap]");
   const stageContainer = uiRoot.querySelector("[data-lab-stage]");
   const titleEl = uiRoot.querySelector("[data-lab-title]");
@@ -104,8 +104,13 @@ export function bootCircuitLab(host, config) {
 
   const wireLayer = new Konva.Layer();
   const componentLayer = new Konva.Layer();
+  const measureLayer = new Konva.Layer({ listening: false });
   stage.add(wireLayer);
   stage.add(componentLayer);
+  stage.add(measureLayer);
+
+  /** @type {ReturnType<typeof createMeasurementsOverlay>|null} */
+  let measurements = null;
 
   let suppressStageClick = false;
   /** @type {{ x: number; y: number }|null} */
@@ -123,7 +128,8 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Repositions the floating wire menu and refreshes the zoom label after camera changes.
+   * Repositions the floating wire menu and measurement labels after camera changes.
+   * Electrical values are unchanged; only layout / font size need a refresh.
    * @param {{ scale: number }} next - Applied camera view.
    */
   function handleCameraViewChange(next) {
@@ -131,6 +137,9 @@ export function bootCircuitLab(host, config) {
       zoomLabel.textContent = Math.round(next.scale * 100) + "%";
     }
     syncWireMenuPosition();
+    if (measurements) {
+      measurements.syncLayout();
+    }
   }
 
   const camera = createStageCamera({
@@ -241,29 +250,7 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Finds the lamp component for a simulation load (by load id or requireHot component).
-   * @param {object} load - Normalized simulation load entry.
-   */
-  function lampForLoad(load) {
-    if (!components || !load) {
-      return null;
-    }
-    const byId = components[load.id];
-    if (byId && byId.componentType === COMPONENT_TYPES.LAMP) {
-      return byId;
-    }
-    const hotComp = load.requireHot && load.requireHot.component;
-    if (hotComp) {
-      const byHot = components[hotComp];
-      if (byHot && byHot.componentType === COMPONENT_TYPES.LAMP) {
-        return byHot;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Applies config-driven load feedback: sound profiles and/or lamp glow.
+   * Applies config-driven load feedback: setEnergized on components, plus sound profiles.
    * @param {{ [loadId: string]: boolean }} energized - Energized map from simulate().
    * @param {{ playSounds?: boolean }} [options] - Whether to play sound profiles.
    */
@@ -273,27 +260,29 @@ export function bootCircuitLab(host, config) {
       config.simulation && Array.isArray(config.simulation.loads)
         ? config.simulation.loads
         : [];
+    const map = getComponents();
 
     for (let i = 0; i < loads.length; i += 1) {
       const load = loads[i];
       const isLive = !!(energized && energized[load.id]);
+      const hotComp =
+        load.requireHot && load.requireHot.component
+          ? map[load.requireHot.component]
+          : null;
+
+      if (hotComp && typeof hotComp.setEnergized === "function") {
+        hotComp.setEnergized(isLive);
+      }
+
       const feedback = load.feedback;
-      if (!feedback) {
-        continue;
-      }
-
-      if (feedback.type === "sound") {
-        if (playSounds && isLive && feedback.profile) {
-          sounds.playProfile(feedback.profile);
-        }
-        continue;
-      }
-
-      if (feedback.type === "light") {
-        const lamp = lampForLoad(load);
-        if (lamp) {
-          applyLampVisual(lamp, { lit: isLive });
-        }
+      if (
+        feedback &&
+        feedback.type === "sound" &&
+        playSounds &&
+        isLive &&
+        feedback.profile
+      ) {
+        sounds.playProfile(feedback.profile);
       }
     }
   }
@@ -467,6 +456,11 @@ export function bootCircuitLab(host, config) {
     onHistoryChange: syncUndoButton,
     onChange: handleWiresChanged,
     onSelectionChange: handleWireSelectionChange,
+    onLayoutChange: function () {
+      if (measurements) {
+        measurements.syncLayout();
+      }
+    },
   });
 
   /**
@@ -485,6 +479,26 @@ export function bootCircuitLab(host, config) {
 
   const simulator = createCircuitSimulator(getWires, getComponents, config.simulation);
   const grader = createGrader(simulator, getComponents, config.grading);
+  measurements = createMeasurementsOverlay(
+    measureLayer,
+    function () {
+      return camera.getView();
+    },
+    getWires,
+    getComponents,
+    function (terminal) {
+      return simulator.terminalKey(terminal);
+    }
+  );
+  const measurementsOn = !!config.measurements;
+  measurements.setEnabled(measurementsOn);
+  if (btnMeasurements) {
+    btnMeasurements.classList.toggle("active", measurementsOn);
+    btnMeasurements.setAttribute(
+      "aria-pressed",
+      measurementsOn ? "true" : "false"
+    );
+  }
 
   /**
    * Re-simulates after wire add/remove/undo (topology changed).
@@ -493,7 +507,6 @@ export function bootCircuitLab(host, config) {
     if (!components) {
       return;
     }
-    simulator.highlightPath({}, false);
     refreshSimulation({ playSounds: false });
     componentLayer.batchDraw();
   }
@@ -558,14 +571,32 @@ export function bootCircuitLab(host, config) {
   }
 
   /**
-   * Re-runs continuity with currently closed toggles and applies load visuals.
-   * @param {{ playSounds?: boolean }} [options] - Whether to play sound profiles.
+   * Re-runs the analog simulation and applies path highlight, load visuals, and overlays.
+   * @param {{
+   *   playSounds?: boolean,
+   *   extraClosedIds?: string[],
+   *   forcePathLive?: boolean,
+   * }} [options] - Sound / momentary-close options.
    */
   function refreshSimulation(options) {
-    const result = simulator.simulate(closedToggleIds());
+    const opts = options || {};
+    let closedIds = closedToggleIds();
+    if (opts.extraClosedIds && opts.extraClosedIds.length) {
+      closedIds = closedIds.concat(opts.extraClosedIds);
+    }
+    const result = simulator.simulate(closedIds);
     applyLoadFeedback(result.energized, {
-      playSounds: !!(options && options.playSounds),
+      playSounds: !!opts.playSounds,
     });
+    const anyLive =
+      !!opts.forcePathLive ||
+      Object.keys(result.energized || {}).some(function (id) {
+        return result.energized[id];
+      });
+    simulator.highlightPath(result.pathKeys, anyLive);
+    if (measurements) {
+      measurements.update(result, config.simulation);
+    }
     return result;
   }
 
@@ -825,13 +856,11 @@ export function bootCircuitLab(host, config) {
    * @param {Konva.Group} button - Pressed button component.
    */
   function handleButtonPress(button) {
-    const closedIds = closedToggleIds();
-    if (button.configId) {
-      closedIds.push(button.configId);
-    }
-    const result = simulator.simulate(closedIds);
-    simulator.highlightPath(result.pathKeys, true);
-    applyLoadFeedback(result.energized, { playSounds: true });
+    refreshSimulation({
+      playSounds: true,
+      forcePathLive: true,
+      extraClosedIds: button.configId ? [button.configId] : [],
+    });
     componentLayer.batchDraw();
   }
 
@@ -850,12 +879,7 @@ export function bootCircuitLab(host, config) {
    */
   function handleToggleSwitch(sw) {
     applySwitchVisual(sw, { closed: !sw.isClosed });
-    const result = simulator.simulate(closedToggleIds());
-    const anyLive = Object.keys(result.energized || {}).some(function (id) {
-      return result.energized[id];
-    });
-    simulator.highlightPath(result.pathKeys, anyLive);
-    applyLoadFeedback(result.energized, { playSounds: true });
+    refreshSimulation({ playSounds: true });
     componentLayer.batchDraw();
   }
 
@@ -1071,6 +1095,18 @@ export function bootCircuitLab(host, config) {
   btnTest.addEventListener("click", runTestSequence);
   btnCheck.addEventListener("click", runCheck);
   btnUndo.addEventListener("click", runUndo);
+  if (btnMeasurements) {
+    btnMeasurements.addEventListener("click", function () {
+      if (!measurements) {
+        return;
+      }
+      const next = !measurements.isEnabled();
+      measurements.setEnabled(next);
+      btnMeasurements.classList.toggle("active", next);
+      btnMeasurements.setAttribute("aria-pressed", next ? "true" : "false");
+      // setEnabled redraws lastResult; no re-solve needed.
+    });
+  }
 
   if (zoomOutBtn) {
     zoomOutBtn.addEventListener("click", function () {
